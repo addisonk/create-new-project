@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useControls, folder, Leva } from "leva";
 import Color from "colorjs.io";
 import type { ColorTokens } from "@/lib/config";
@@ -24,16 +24,6 @@ function oklchToLeva(value: string): LevaColor {
   }
 }
 
-function hexToOklch(hex: string): string {
-  try {
-    const c = new Color(hex);
-    const oklch = c.to("oklch");
-    return `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`;
-  } catch {
-    return hex;
-  }
-}
-
 const COLOR_KEYS = [
   "background", "foreground",
   "primary", "primary-foreground",
@@ -41,7 +31,7 @@ const COLOR_KEYS = [
   "accent", "accent-foreground",
   "muted", "muted-foreground",
   "destructive",
-  "border", "ring",
+  "border", "input", "ring",
   "card", "card-foreground",
   "chart-1", "chart-2", "chart-3",
 ];
@@ -58,20 +48,6 @@ function buildColorSchema(
     schema[`${prefix}${key}`] = {
       value: oklchToLeva(raw),
       label: key,
-      onChange: (val: LevaColor) => {
-        const isDark = document.documentElement.classList.contains("dark");
-        const currentMode = isDark ? "dark" : "light";
-        if (currentMode === mode) {
-          if (typeof val === "object" && "r" in val) {
-            document.documentElement.style.setProperty(
-              `--${key}`,
-              `rgba(${val.r}, ${val.g}, ${val.b}, ${val.a ?? 1})`
-            );
-          } else if (typeof val === "string") {
-            document.documentElement.style.setProperty(`--${key}`, hexToOklch(val));
-          }
-        }
-      },
     };
   }
   return schema;
@@ -80,23 +56,64 @@ function buildColorSchema(
 function useThemeTinker(colorTokens: ColorTokens) {
   const lightSchema = buildColorSchema(colorTokens.light, "light");
   const darkSchema = buildColorSchema(colorTokens.dark, "dark");
+  const userEdited = useRef<Set<string>>(new Set());
+  const prevValues = useRef<Record<string, unknown>>({});
 
-  useControls({
+  const [values] = useControls(() => ({
     "Light Mode": folder(lightSchema, { collapsed: false }),
     "Dark Mode": folder(darkSchema, { collapsed: true }),
     "Radius": {
-      value: typeof window !== "undefined"
-        ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--radius")) || 0.625
-        : 0.625,
+      value: 0.625,
       min: 0,
       max: 2,
       step: 0.025,
       label: "Radius (rem)",
-      onChange: (v: number) => {
-        document.documentElement.style.setProperty("--radius", `${v}rem`);
-      },
     },
-  });
+  }), []);
+
+  // Track user edits and apply only those
+  useEffect(() => {
+    for (const [key, val] of Object.entries(values)) {
+      if (!val) continue;
+      const prev = prevValues.current[key];
+      const prevStr = JSON.stringify(prev);
+      const valStr = JSON.stringify(val);
+
+      // Skip initial render
+      if (prev !== undefined && prevStr !== valStr) {
+        userEdited.current.add(key);
+      }
+
+      if (userEdited.current.has(key)) {
+        // Determine the CSS variable name — strip dk: prefix for dark mode keys
+        const cssKey = key.startsWith("dk:") ? key.slice(3) : key;
+        const isDark = document.documentElement.classList.contains("dark");
+        const isForDark = key.startsWith("dk:");
+
+        // Only apply if the current mode matches
+        if ((isDark && isForDark) || (!isDark && !isForDark)) {
+          if (key === "Radius") {
+            document.documentElement.style.setProperty("--radius", `${val}rem`);
+          } else if (typeof val === "object" && "r" in val) {
+            const { r, g, b, a } = val as { r: number; g: number; b: number; a: number };
+            document.documentElement.style.setProperty(`--${cssKey}`, `rgba(${r}, ${g}, ${b}, ${a ?? 1})`);
+          } else if (typeof val === "string") {
+            try {
+              const c = new Color(val);
+              const oklch = c.to("oklch");
+              document.documentElement.style.setProperty(
+                `--${cssKey}`,
+                `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`
+              );
+            } catch {
+              document.documentElement.style.setProperty(`--${cssKey}`, val);
+            }
+          }
+        }
+      }
+    }
+    prevValues.current = { ...values };
+  }, [values]);
 }
 
 export function ThemeTinker({
