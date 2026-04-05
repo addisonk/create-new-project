@@ -265,7 +265,9 @@ function PaletteBlock({
 function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
   return (
     <div className={`flex flex-col justify-end ${bg} p-4`} style={{ minHeight: 100 }}>
-      <span className="self-start bg-background px-2 py-1 text-sm font-medium text-foreground">{name}</span>
+      <span className="self-start bg-background px-2 py-1">
+        <p className="text-sm font-medium text-foreground">{name}</p>
+      </span>
     </div>
   );
 }
