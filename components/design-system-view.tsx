@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
+import Color from "colorjs.io";
 import type { DesignSystemConfig } from "@/lib/config";
 import { IconProvider } from "@/components/icon-context";
 import Preview02 from "@/components/blocks/preview-02/index";
@@ -261,12 +262,59 @@ function PaletteBlock({
   );
 }
 
+function getContrastTextColor(fgColor: string, pageBgColor: string): string {
+  try {
+    let bg = new Color(fgColor);
+
+    // If the color has alpha < 1, composite it over the page background
+    if (bg.alpha < 1) {
+      const pageBg = new Color(pageBgColor);
+      // Manual alpha composite: result = alpha * fg + (1-alpha) * bg
+      const alpha = bg.alpha;
+      const fgSRGB = bg.to("srgb");
+      const bgSRGB = pageBg.to("srgb");
+      const r = alpha * fgSRGB.coords[0] + (1 - alpha) * bgSRGB.coords[0];
+      const g = alpha * fgSRGB.coords[1] + (1 - alpha) * bgSRGB.coords[1];
+      const b = alpha * fgSRGB.coords[2] + (1 - alpha) * bgSRGB.coords[2];
+      bg = new Color("srgb", [r, g, b]);
+    }
+
+    const contrastBlack = bg.contrastWCAG21(new Color("black"));
+    const contrastWhite = bg.contrastWCAG21(new Color("white"));
+    return contrastBlack > contrastWhite ? "#000000" : "#ffffff";
+  } catch {
+    return "#ffffff";
+  }
+}
+
 function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [textColor, setTextColor] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const update = () => {
+      if (!ref.current) return;
+      const bgColor = window.getComputedStyle(ref.current).backgroundColor;
+      const pageBg = window.getComputedStyle(document.body).backgroundColor;
+      setTextColor(getContrastTextColor(bgColor, pageBg));
+    };
+    // Run after paint
+    requestAnimationFrame(update);
+
+    // Re-run when dark mode toggles
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className={`relative rounded-xl ${bg}`} style={{ minHeight: 100 }}>
-      <span className="absolute bottom-2 left-2 bg-background rounded px-2 py-1">
-        <p className="text-sm font-medium text-foreground">{name}</p>
-      </span>
+    <div ref={ref} className={`relative rounded-xl ${bg}`} style={{ minHeight: 100 }}>
+      <p
+        className="absolute bottom-2 left-2 text-sm font-medium"
+        style={{ color: textColor ?? "transparent" }}
+      >
+        {name}
+      </p>
     </div>
   );
 }
