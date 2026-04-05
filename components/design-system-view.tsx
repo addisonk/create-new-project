@@ -251,13 +251,13 @@ function PaletteBlock({
   bg: string; fg: string; name: string; span?: string; height?: number;
 }) {
   const fgName = fg.replace("text-", "");
+  // Use the same bg color as the block for the label background so it aligns with AutoContrastBlock
   return (
-    <div className={`flex flex-col justify-between ${bg} ${fg} p-4 ${span ?? ""}`} style={{ minHeight: height }}>
-      <span />
-      <div>
-        <p className={`text-sm font-medium ${fg}`}>{name}</p>
-        <p className={`text-xs ${fg} opacity-80`}>{fgName}</p>
-      </div>
+    <div className={`flex flex-col justify-end ${bg} p-4 ${span ?? ""}`} style={{ minHeight: height }}>
+      <span className={`self-start ${bg} ${fg} px-2 py-1`}>
+        <p className="text-sm font-medium">{name}</p>
+        <p className="text-xs opacity-80">{fgName}</p>
+      </span>
     </div>
   );
 }
