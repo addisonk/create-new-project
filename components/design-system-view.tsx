@@ -123,7 +123,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
           Color Palette
         </h2>
 
-        <div className="mb-8 grid grid-cols-5gap-px">
+        <div className="mb-8 grid grid-cols-5 gap-px">
           <PaletteBlock bg="bg-primary" fg="text-primary-foreground" name="Primary" span="col-span-2 row-span-2" height={240} />
           <PaletteBlock bg="bg-secondary" fg="text-secondary-foreground" name="Secondary" />
           <PaletteBlock bg="bg-accent" fg="text-accent-foreground" name="Accent" />
@@ -147,7 +147,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
 
         <h3 className="mb-3 text-sm font-medium text-muted-foreground">Charts</h3>
-        <div className="mb-8 grid grid-cols-5gap-px">
+        <div className="mb-8 grid grid-cols-5 gap-px">
           <AutoContrastBlock bg="bg-chart-1" name="Chart 1" />
           <AutoContrastBlock bg="bg-chart-2" name="Chart 2" />
           <AutoContrastBlock bg="bg-chart-3" name="Chart 3" />
