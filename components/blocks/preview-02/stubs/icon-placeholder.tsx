@@ -1,13 +1,6 @@
 "use client"
 
-// Default: lucide. The create-new-project skill updates this import
-// to match the project's iconLibrary from components.json.
-// Supported: lucide-react, @tabler/icons-react, @phosphor-icons/react, @remixicon/react
-// For hugeicons: uses @hugeicons/core-free-icons with HugeiconsIcon wrapper
-import * as Icons from "lucide-react"
-
-// Which prop to read from the icon map (matches the import above)
-const LIBRARY_KEY = "lucide" as const
+import { useIcons } from "@/components/icon-context"
 
 export function IconPlaceholder({
   className,
@@ -21,10 +14,12 @@ export function IconPlaceholder({
   remixicon?: string
   [key: string]: unknown
 }) {
-  const iconName = props[LIBRARY_KEY] as string | undefined
-  if (iconName) {
-    const Icon = (Icons as Record<string, React.ComponentType<{ className?: string }>>)[iconName]
-    if (Icon) return <Icon className={className} />
+  const { library, icons } = useIcons()
+  const iconName = props[library] as string | undefined
+
+  if (iconName && icons[iconName]) {
+    const Icon = icons[iconName]
+    return <Icon className={className} />
   }
   return <div className={className} />
 }

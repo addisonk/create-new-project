@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import type { DesignSystemConfig } from "@/lib/config";
+import { IconProvider } from "@/components/icon-context";
 import Preview02 from "@/components/blocks/preview-02/index";
 
 const Preview = React.lazy(() => import("@/components/blocks/preview/index"));
@@ -35,9 +36,11 @@ class BlockErrorBoundary extends React.Component<
 
 export function DesignSystemView({ config }: { config: DesignSystemConfig }) {
   return (
-    <React.Suspense>
-      <DesignSystemContent config={config} />
-    </React.Suspense>
+    <IconProvider library={config.iconLibrary}>
+      <React.Suspense>
+        <DesignSystemContent config={config} />
+      </React.Suspense>
+    </IconProvider>
   );
 }
 
