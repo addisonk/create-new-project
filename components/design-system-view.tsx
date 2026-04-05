@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Color from "colorjs.io";
 import type { DesignSystemConfig } from "@/lib/config";
 import { IconProvider } from "@/components/icon-context";
+import { ThemeTinker } from "@/components/theme-tinker";
 import Preview02 from "@/components/blocks/preview-02/index";
 
 const Preview = React.lazy(() => import("@/components/blocks/preview/index"));
@@ -47,6 +48,7 @@ export function DesignSystemView({ config }: { config: DesignSystemConfig }) {
 
 function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
   const [activePreview, setActivePreview] = React.useState<1 | 2>(2);
+  const [tinkerOpen, setTinkerOpen] = React.useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const filter = searchParams.get("section") as "type" | "color" | "radius" | "blocks" | null;
@@ -79,19 +81,30 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
               Press D to toggle dark mode
             </p>
           </div>
-          <Select value={filter ?? "all"} onValueChange={(v) => setFilter(v === "all" ? null : v)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              {pills.map((pill) => (
-                <SelectItem key={pill.id} value={pill.id}>{pill.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={tinkerOpen ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTinkerOpen(!tinkerOpen)}
+            >
+              {tinkerOpen ? "Close Tinker" : "Tinker"}
+            </Button>
+            <Select value={filter ?? "all"} onValueChange={(v) => setFilter(v === "all" ? null : v)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {pills.map((pill) => (
+                  <SelectItem key={pill.id} value={pill.id}>{pill.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
+
+      <ThemeTinker enabled={tinkerOpen} />
 
       {/* ─── Typography ─── */}
       {show("type") && <>
