@@ -295,7 +295,7 @@ function FontSection({
   fontClass: string; name: string; label: string; weights: string[];
 }) {
   return (
-    <div className="mb-16">
+    <div className="mb-24 last:mb-0">
       <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
       <div className={`${fontClass} text-6xl font-bold tracking-tight md:text-8xl`}>{name}</div>
       <div className="my-8 border-t border-border" />
