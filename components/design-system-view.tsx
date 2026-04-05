@@ -123,7 +123,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
           Color Palette
         </h2>
 
-        <div className="mb-8 grid grid-cols-5" style={{ gap: "var(--radius)" }}>
+        <div className="mb-8 grid grid-cols-5gap-px">
           <PaletteBlock bg="bg-primary" fg="text-primary-foreground" name="Primary" span="col-span-2 row-span-2" height={240} />
           <PaletteBlock bg="bg-secondary" fg="text-secondary-foreground" name="Secondary" />
           <PaletteBlock bg="bg-accent" fg="text-accent-foreground" name="Accent" />
@@ -134,7 +134,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
 
         <h3 className="mb-3 text-sm font-medium text-muted-foreground">Foregrounds & Utility</h3>
-        <div className="mb-8 grid grid-cols-3 md:grid-cols-6" style={{ gap: "var(--radius)" }}>
+        <div className="mb-8 grid grid-cols-3 gap-px md:grid-cols-6" >
           <AutoContrastBlock bg="bg-foreground" name="Foreground" />
           <AutoContrastBlock bg="bg-primary-foreground" name="Primary FG" />
           <AutoContrastBlock bg="bg-secondary-foreground" name="Secondary FG" />
@@ -147,7 +147,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
 
         <h3 className="mb-3 text-sm font-medium text-muted-foreground">Charts</h3>
-        <div className="mb-8 grid grid-cols-5" style={{ gap: "var(--radius)" }}>
+        <div className="mb-8 grid grid-cols-5gap-px">
           <AutoContrastBlock bg="bg-chart-1" name="Chart 1" />
           <AutoContrastBlock bg="bg-chart-2" name="Chart 2" />
           <AutoContrastBlock bg="bg-chart-3" name="Chart 3" />
@@ -156,7 +156,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
 
         <h3 className="mb-3 text-sm font-medium text-muted-foreground">Sidebar</h3>
-        <div className="mb-8 grid grid-cols-4 md:grid-cols-6" style={{ gap: "var(--radius)" }}>
+        <div className="mb-8 grid grid-cols-4 gap-px md:grid-cols-6" >
           <PaletteBlock bg="bg-sidebar" fg="text-sidebar-foreground" name="Sidebar" />
           <AutoContrastBlock bg="bg-sidebar-foreground" name="Sidebar FG" />
           <PaletteBlock bg="bg-sidebar-primary" fg="text-sidebar-primary-foreground" name="Sidebar Primary" />
@@ -253,7 +253,7 @@ function PaletteBlock({
 }) {
   const fgName = fg.replace("text-", "");
   return (
-    <div className={`relative rounded-xl ${bg} ${span ?? ""}`} style={{ minHeight: height }}>
+    <div className={`relative ${bg} ${span ?? ""}`} style={{ minHeight: height }}>
       <span className={`absolute bottom-2 left-2 ${bg} ${fg} rounded px-2 py-1`}>
         <p className="text-sm font-medium">{name}</p>
         <p className="text-xs opacity-80">{fgName}</p>
@@ -308,7 +308,7 @@ function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
   }, []);
 
   return (
-    <div ref={ref} className={`relative rounded-xl ${bg}`} style={{ minHeight: 100 }}>
+    <div ref={ref} className={`relative ${bg}`} style={{ minHeight: 100 }}>
       <p
         className="absolute bottom-2 left-2 text-sm font-medium"
         style={{ color: textColor ?? "transparent" }}
