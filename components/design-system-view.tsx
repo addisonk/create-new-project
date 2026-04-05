@@ -7,7 +7,8 @@ import { Separator } from "@workspace/ui/components/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
 import Color from "colorjs.io";
 import type { DesignSystemConfig } from "@/lib/config";
-import { IconProvider } from "@/components/icon-context";
+// Icons are handled via static imports in the IconPlaceholder stubs
+// The /create-new-project skill swaps the import to match the project's iconLibrary
 import { ThemeTinker } from "@/components/theme-tinker";
 import Preview02 from "@/components/blocks/preview-02/index";
 
@@ -38,11 +39,9 @@ class BlockErrorBoundary extends React.Component<
 
 export function DesignSystemView({ config }: { config: DesignSystemConfig }) {
   return (
-    <IconProvider library={config.iconLibrary}>
-      <React.Suspense>
-        <DesignSystemContent config={config} />
-      </React.Suspense>
-    </IconProvider>
+    <React.Suspense>
+      <DesignSystemContent config={config} />
+    </React.Suspense>
   );
 }
 
