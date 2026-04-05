@@ -104,7 +104,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
       </div>
 
-      <ThemeTinker enabled={tinkerOpen} />
+      <ThemeTinker enabled={tinkerOpen} colorTokens={config.colorTokens} />
 
       {/* ─── Typography ─── */}
       {show("type") && <>

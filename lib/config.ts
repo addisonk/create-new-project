@@ -9,10 +9,16 @@ export interface FontInfo {
   weights: string[];
 }
 
+export interface ColorTokens {
+  light: Record<string, string>;
+  dark: Record<string, string>;
+}
+
 export interface DesignSystemConfig {
   style: string;
   iconLibrary: string;
   fonts: FontInfo[];
+  colorTokens: ColorTokens;
 }
 
 // Standard weight detection by font class
@@ -45,11 +51,45 @@ export function getDesignSystemConfig(): DesignSystemConfig {
 
   const fonts = parseFontsFromLayout(layoutContent);
 
+  // Read globals.css to extract color tokens for both modes
+  const cssPath = path.resolve(process.cwd(), "../../packages/ui/src/styles/globals.css");
+  const cssContent = fs.readFileSync(cssPath, "utf-8");
+  const colorTokens = parseColorTokens(cssContent);
+
   return {
     style: uiConfig.style ?? "radix-nova",
     iconLibrary: uiConfig.iconLibrary ?? "lucide",
     fonts,
+    colorTokens,
   };
+}
+
+function parseColorTokens(css: string): ColorTokens {
+  const light: Record<string, string> = {};
+  const dark: Record<string, string> = {};
+
+  // Match :root { ... } block
+  const rootMatch = css.match(/:root\s*\{([^}]+)\}/);
+  if (rootMatch) {
+    parseVarsFromBlock(rootMatch[1], light);
+  }
+
+  // Match .dark { ... } block
+  const darkMatch = css.match(/\.dark\s*\{([^}]+)\}/);
+  if (darkMatch) {
+    parseVarsFromBlock(darkMatch[1], dark);
+  }
+
+  return { light, dark };
+}
+
+function parseVarsFromBlock(block: string, target: Record<string, string>) {
+  const varRe = /--([\w-]+)\s*:\s*([^;]+);/g;
+  for (const match of block.matchAll(varRe)) {
+    const name = match[1];
+    const value = match[2].trim();
+    target[name] = value;
+  }
 }
 
 function parseFontsFromLayout(source: string): FontInfo[] {
