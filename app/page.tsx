@@ -98,12 +98,14 @@ function HomeContent() {
         <FontSection
           fontClass="font-sans"
           name="Geist"
+          label="Body"
           weights={["Light", "Regular", "Medium", "Semibold", "Bold"]}
         />
 
         <FontSection
           fontClass="font-mono"
           name="Geist Mono"
+          label="Mono"
           weights={["Regular", "Medium", "Bold"]}
         />
       </section>
@@ -275,15 +277,20 @@ function PaletteBlock({
 function FontSection({
   fontClass,
   name,
+  label,
   weights,
 }: {
   fontClass: string;
   name: string;
+  label: string;
   weights: string[];
 }) {
   return (
     <div className="mb-16">
-      {/* Top — font name large */}
+      {/* Top — role label + font name large */}
+      <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       <div className={`${fontClass} text-6xl font-bold uppercase tracking-tight md:text-8xl`}>
         {name}
       </div>
