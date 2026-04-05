@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { useControls, folder, Leva } from "leva";
 import Color from "colorjs.io";
 import type { ColorTokens } from "@/lib/config";
@@ -71,49 +71,62 @@ function useThemeTinker(colorTokens: ColorTokens) {
     },
   }), []);
 
-  // Track user edits and apply only those
-  useEffect(() => {
-    for (const [key, val] of Object.entries(values)) {
-      if (!val) continue;
-      const prev = prevValues.current[key];
-      const prevStr = JSON.stringify(prev);
-      const valStr = JSON.stringify(val);
+  // Apply overrides for the current mode only
+  const applyOverrides = useCallback(() => {
+    const isDark = document.documentElement.classList.contains("dark");
 
-      // Skip initial render
-      if (prev !== undefined && prevStr !== valStr) {
-        userEdited.current.add(key);
-      }
+    // Clear ALL color overrides first
+    for (const key of COLOR_KEYS) {
+      document.documentElement.style.removeProperty(`--${key}`);
+    }
 
-      if (userEdited.current.has(key)) {
-        // Determine the CSS variable name — strip dk: prefix for dark mode keys
-        const cssKey = key.startsWith("dk:") ? key.slice(3) : key;
-        const isDark = document.documentElement.classList.contains("dark");
-        const isForDark = key.startsWith("dk:");
+    // Re-apply only user-edited values matching current mode
+    for (const editedKey of userEdited.current) {
+      const cssKey = editedKey.startsWith("dk:") ? editedKey.slice(3) : editedKey;
+      const isForDark = editedKey.startsWith("dk:");
 
-        // Only apply if the current mode matches
-        if ((isDark && isForDark) || (!isDark && !isForDark)) {
-          if (key === "Radius") {
-            document.documentElement.style.setProperty("--radius", `${val}rem`);
-          } else if (typeof val === "object" && "r" in val) {
-            const { r, g, b, a } = val as { r: number; g: number; b: number; a: number };
-            document.documentElement.style.setProperty(`--${cssKey}`, `rgba(${r}, ${g}, ${b}, ${a ?? 1})`);
-          } else if (typeof val === "string") {
-            try {
-              const c = new Color(val);
-              const oklch = c.to("oklch");
-              document.documentElement.style.setProperty(
-                `--${cssKey}`,
-                `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`
-              );
-            } catch {
-              document.documentElement.style.setProperty(`--${cssKey}`, val);
-            }
+      if ((isDark && isForDark) || (!isDark && !isForDark)) {
+        const val = values[editedKey];
+        if (!val) continue;
+
+        if (typeof val === "object" && "r" in val) {
+          const { r, g, b, a } = val as { r: number; g: number; b: number; a: number };
+          document.documentElement.style.setProperty(`--${cssKey}`, `rgba(${r}, ${g}, ${b}, ${a ?? 1})`);
+        } else if (typeof val === "string") {
+          try {
+            const c = new Color(val);
+            const oklch = c.to("oklch");
+            document.documentElement.style.setProperty(
+              `--${cssKey}`,
+              `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`
+            );
+          } catch {
+            document.documentElement.style.setProperty(`--${cssKey}`, val);
           }
         }
       }
     }
-    prevValues.current = { ...values };
   }, [values]);
+
+  // Track user edits
+  useEffect(() => {
+    for (const [key, val] of Object.entries(values)) {
+      if (!val || key === "Radius") continue;
+      const prev = prevValues.current[key];
+      if (prev !== undefined && JSON.stringify(prev) !== JSON.stringify(val)) {
+        userEdited.current.add(key);
+      }
+    }
+    prevValues.current = { ...values };
+    applyOverrides();
+  }, [values, applyOverrides]);
+
+  // Clear and re-apply when dark mode toggles
+  useEffect(() => {
+    const observer = new MutationObserver(() => applyOverrides());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [applyOverrides]);
 }
 
 export function ThemeTinker({
