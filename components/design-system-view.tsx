@@ -252,7 +252,7 @@ function PaletteBlock({
 }) {
   const fgName = fg.replace("text-", "");
   return (
-    <div className={`relative rounded ${bg} ${span ?? ""}`} style={{ minHeight: height }}>
+    <div className={`relative rounded-xl ${bg} ${span ?? ""}`} style={{ minHeight: height }}>
       <span className={`absolute bottom-2 left-2 ${bg} ${fg} rounded px-2 py-1`}>
         <p className="text-sm font-medium">{name}</p>
         <p className="text-xs opacity-80">{fgName}</p>
@@ -263,7 +263,7 @@ function PaletteBlock({
 
 function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
   return (
-    <div className={`relative rounded ${bg}`} style={{ minHeight: 100 }}>
+    <div className={`relative rounded-xl ${bg}`} style={{ minHeight: 100 }}>
       <span className="absolute bottom-2 left-2 bg-background rounded px-2 py-1">
         <p className="text-sm font-medium text-foreground">{name}</p>
       </span>
