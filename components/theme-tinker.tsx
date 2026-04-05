@@ -5,12 +5,20 @@ import { useControls, folder, Leva } from "leva";
 import Color from "colorjs.io";
 import type { ColorTokens } from "@/lib/config";
 
-function oklchToHex(value: string): string {
+type LevaColor = string | { r: number; g: number; b: number; a: number };
+
+function oklchToLeva(value: string): LevaColor {
   try {
     const c = new Color(value);
     const srgb = c.to("srgb");
-    const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n * 255))).toString(16).padStart(2, "0");
-    return `#${toHex(srgb.coords[0])}${toHex(srgb.coords[1])}${toHex(srgb.coords[2])}`;
+    const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n * 255)));
+    const r = clamp(srgb.coords[0]);
+    const g = clamp(srgb.coords[1]);
+    const b = clamp(srgb.coords[2]);
+    const a = c.alpha != null ? Math.round(c.alpha * 100) / 100 : 1;
+    if (a < 1) return { r, g, b, a };
+    const toHex = (n: number) => n.toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   } catch {
     return "#888888";
   }
@@ -48,13 +56,20 @@ function buildColorSchema(
     const raw = tokens[key];
     if (!raw) continue;
     schema[`${prefix}${key}`] = {
-      value: oklchToHex(raw),
+      value: oklchToLeva(raw),
       label: key,
-      onChange: (hex: string) => {
+      onChange: (val: LevaColor) => {
         const isDark = document.documentElement.classList.contains("dark");
         const currentMode = isDark ? "dark" : "light";
         if (currentMode === mode) {
-          document.documentElement.style.setProperty(`--${key}`, hexToOklch(hex));
+          if (typeof val === "object" && "r" in val) {
+            document.documentElement.style.setProperty(
+              `--${key}`,
+              `rgba(${val.r}, ${val.g}, ${val.b}, ${val.a ?? 1})`
+            );
+          } else if (typeof val === "string") {
+            document.documentElement.style.setProperty(`--${key}`, hexToOklch(val));
+          }
         }
       },
     };
