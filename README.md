@@ -44,7 +44,7 @@ pnpm install
 pnpm --filter design-system dev
 ```
 
-Opens at `http://localhost:4321`.
+Opens at the next available port (shown in terminal output).
 
 ## What it shows
 
