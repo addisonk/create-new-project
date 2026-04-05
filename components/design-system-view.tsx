@@ -198,7 +198,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
 
         <div>
           <div className="relative overflow-hidden rounded-2xl ring ring-foreground/10 dark:ring-foreground/10">
-            <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0px_0px_17px_10px_var(--background)]" />
+            <div className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0px_0px_17px_10px_var(--muted)] dark:shadow-[inset_0px_0px_17px_10px_var(--background)]" />
             <div className="relative bg-muted dark:bg-muted/30">
               <div className="h-[80vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <BlockErrorBoundary>
