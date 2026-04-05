@@ -331,7 +331,7 @@ function RadiusBlock({ cls, label, cssVar, value }: { cls: string; label: string
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div ref={ref} className={`aspect-square w-full border border-dashed border-muted-foreground ${cls}`} />
+      <div ref={ref} className={`aspect-square w-full bg-muted ${cls}`} />
       <div className="text-center">
         <span className="font-mono text-xs text-foreground">{label}</span>
         <span className="block font-mono text-[10px] text-muted-foreground">{resolved}</span>
