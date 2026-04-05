@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useControls, Leva } from "leva";
+import { useControls, folder, Leva } from "leva";
 import Color from "colorjs.io";
 
 const TOKEN_NAMES = [
@@ -27,124 +27,105 @@ function cssToHex(value: string): string {
   }
 }
 
-function readTokens(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const style = getComputedStyle(document.documentElement);
-  const tokens: Record<string, string> = {};
-  for (const name of TOKEN_NAMES) {
-    const raw = style.getPropertyValue(name).trim();
-    tokens[name] = cssToHex(raw);
+function hexToOklch(hex: string): string {
+  try {
+    const c = new Color(hex);
+    const oklch = c.to("oklch");
+    return `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`;
+  } catch {
+    return hex;
   }
-  // Read radius as a number
+}
+
+function readTokensForMode(mode: "light" | "dark"): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const tokens: Record<string, string> = {};
+
+  // Temporarily force the mode to read its values
+  const html = document.documentElement;
+  const wasDark = html.classList.contains("dark");
+
+  if (mode === "dark") {
+    html.classList.add("dark");
+  } else {
+    html.classList.remove("dark");
+  }
+
+  const style = getComputedStyle(html);
+  for (const name of TOKEN_NAMES) {
+    tokens[name] = cssToHex(style.getPropertyValue(name).trim());
+  }
   tokens["--radius"] = style.getPropertyValue("--radius").trim();
+
+  // Restore original mode
+  if (wasDark) {
+    html.classList.add("dark");
+  } else {
+    html.classList.remove("dark");
+  }
+
   return tokens;
 }
 
 function useThemeTinker() {
-  const [defaults, setDefaults] = useState<Record<string, string>>({});
+  const [lightDefaults, setLightDefaults] = useState<Record<string, string>>({});
+  const [darkDefaults, setDarkDefaults] = useState<Record<string, string>>({});
   const [mounted, setMounted] = useState(false);
-  const userEdited = useRef<Set<string>>(new Set());
 
-  // Read tokens and re-read on dark mode toggle
   useEffect(() => {
-    const read = () => {
-      // Remove any user overrides before reading defaults
-      for (const name of TOKEN_NAMES) {
-        document.documentElement.style.removeProperty(name);
-      }
-      document.documentElement.style.removeProperty("--radius");
-      userEdited.current.clear();
-      setDefaults(readTokens());
-    };
-    read();
-    setMounted(true);
+    // Remove any overrides before reading
+    for (const name of TOKEN_NAMES) {
+      document.documentElement.style.removeProperty(name);
+    }
 
-    // Watch for dark mode toggle (class change on <html>)
-    const observer = new MutationObserver(read);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
+    setLightDefaults(readTokensForMode("light"));
+    setDarkDefaults(readTokensForMode("dark"));
+    setMounted(true);
   }, []);
 
-  // Build Leva schema from defaults
-  const colorSchema: Record<string, unknown> = {};
+  // Build schemas for both modes
+  const lightSchema: Record<string, unknown> = {};
+  const darkSchema: Record<string, unknown> = {};
+
   for (const name of TOKEN_NAMES) {
     const label = name.replace("--", "");
-    colorSchema[label] = { value: defaults[name] ?? "#000000" };
+    lightSchema[label] = {
+      value: lightDefaults[name] ?? "#000000",
+      onChange: (hex: string) => {
+        // Only apply if we're currently in light mode
+        if (!document.documentElement.classList.contains("dark")) {
+          document.documentElement.style.setProperty(name, hexToOklch(hex));
+        }
+      },
+    };
+    darkSchema[label] = {
+      value: darkDefaults[name] ?? "#000000",
+      onChange: (hex: string) => {
+        // Only apply if we're currently in dark mode
+        if (document.documentElement.classList.contains("dark")) {
+          document.documentElement.style.setProperty(name, hexToOklch(hex));
+        }
+      },
+    };
   }
 
-  const [values, set] = useControls(
-    "Colors",
-    () => colorSchema,
-    { collapsed: false },
-    [mounted]
-  );
-
-  const [radiusValues] = useControls(
-    "Layout",
-    () => ({
-      radius: {
-        value: parseFloat(defaults["--radius"] || "0.625"),
+  useControls(
+    {
+      "Light Mode": folder(lightSchema, { collapsed: false }),
+      "Dark Mode": folder(darkSchema, { collapsed: true }),
+      Radius: {
+        value: parseFloat(lightDefaults["--radius"] || "0.625"),
         min: 0,
         max: 2,
         step: 0.025,
         label: "Radius (rem)",
+        onChange: (v: number) => {
+          document.documentElement.style.setProperty("--radius", `${v}rem`);
+        },
       },
-    }),
-    { collapsed: false },
+    },
     [mounted]
   );
-
-  // Sync Leva values when defaults change (dark mode toggle)
-  useEffect(() => {
-    if (Object.keys(defaults).length > 0) {
-      const update: Record<string, string> = {};
-      for (const name of TOKEN_NAMES) {
-        const label = name.replace("--", "");
-        update[label] = defaults[name] ?? "#000000";
-      }
-      set(update);
-    }
-  }, [defaults, set]);
-
-  // Apply user edits to CSS
-  const prevValues = useRef<Record<string, unknown>>({});
-  useEffect(() => {
-    for (const [key, val] of Object.entries(values)) {
-      if (!val) continue;
-      const prev = prevValues.current[key];
-      const def = defaults[`--${key}`];
-      const valStr = JSON.stringify(val);
-      const prevStr = JSON.stringify(prev);
-
-      // Track if user manually changed this
-      if (prev !== undefined && prevStr !== valStr && val !== def) {
-        userEdited.current.add(key);
-      }
-
-      // Only apply user-edited values
-      if (userEdited.current.has(key) && typeof val === "string") {
-        // Convert hex back to oklch for CSS
-        try {
-          const c = new Color(val);
-          const oklch = c.to("oklch");
-          const l = oklch.coords[0]?.toFixed(3) ?? "0";
-          const ch = oklch.coords[1]?.toFixed(3) ?? "0";
-          const h = oklch.coords[2]?.toFixed(1) ?? "0";
-          document.documentElement.style.setProperty(`--${key}`, `oklch(${l} ${ch} ${h})`);
-        } catch {
-          document.documentElement.style.setProperty(`--${key}`, val);
-        }
-      }
-    }
-    prevValues.current = { ...values };
-  }, [values, defaults]);
-
-  // Apply radius
-  useEffect(() => {
-    if (radiusValues.radius !== parseFloat(defaults["--radius"] || "0.625")) {
-      document.documentElement.style.setProperty("--radius", `${radiusValues.radius}rem`);
-    }
-  }, [radiusValues.radius, defaults]);
 }
 
 export function ThemeTinker({ enabled }: { enabled: boolean }) {
