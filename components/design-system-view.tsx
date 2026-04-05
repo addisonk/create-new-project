@@ -100,14 +100,16 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
           Typography
         </h2>
 
-        {config.fonts.map((font) => (
-          <FontSection
-            key={font.variable}
-            fontClass={font.fontClass}
-            name={font.name}
-            label={font.label}
-            weights={font.weights}
-          />
+        {config.fonts.map((font, i) => (
+          <React.Fragment key={font.variable}>
+            {i > 0 && <Separator className="mb-24" />}
+            <FontSection
+              fontClass={font.fontClass}
+              name={font.name}
+              label={font.label}
+              weights={font.weights}
+            />
+          </React.Fragment>
         ))}
       </section>
       </>}
@@ -297,8 +299,7 @@ function FontSection({
   return (
     <div className="mb-24 last:mb-0">
       <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
-      <div className={`${fontClass} text-6xl font-bold tracking-tight md:text-8xl`}>{name}</div>
-      <div className="my-8 border-t border-border" />
+      <div className={`${fontClass} text-6xl font-bold tracking-tight md:text-8xl mb-8`}>{name}</div>
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
         <div className={`${fontClass} text-[180px] leading-[0.8] tracking-tight`}>Aa</div>
         <div>
