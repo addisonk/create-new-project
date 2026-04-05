@@ -43,11 +43,13 @@ function buildColorSchema(
   mode: "light" | "dark"
 ): Record<string, unknown> {
   const schema: Record<string, unknown> = {};
+  const prefix = mode === "dark" ? "dk:" : "";
   for (const key of COLOR_KEYS) {
     const raw = tokens[key];
     if (!raw) continue;
-    schema[key] = {
+    schema[`${prefix}${key}`] = {
       value: oklchToHex(raw),
+      label: key,
       onChange: (hex: string) => {
         const isDark = document.documentElement.classList.contains("dark");
         const currentMode = isDark ? "dark" : "light";
