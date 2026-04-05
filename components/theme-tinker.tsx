@@ -1,102 +1,153 @@
 "use client";
 
-import { useControls, folder, button, Leva } from "leva";
+import { useEffect, useRef, useState } from "react";
+import { useControls, Leva } from "leva";
 import Color from "colorjs.io";
-import { useEffect, useRef } from "react";
 
-// Convert any CSS color (oklch, lab, etc.) to hex for Leva's color picker
-function cssToHex(cssValue: string): string {
+const TOKEN_NAMES = [
+  "--background", "--foreground",
+  "--primary", "--primary-foreground",
+  "--secondary", "--secondary-foreground",
+  "--accent", "--accent-foreground",
+  "--muted", "--muted-foreground",
+  "--destructive",
+  "--border", "--ring",
+  "--card", "--card-foreground",
+  "--chart-1", "--chart-2", "--chart-3",
+] as const;
+
+function cssToHex(value: string): string {
   try {
-    const c = new Color(cssValue);
-    return c.to("srgb").toString({ format: "hex" });
+    const c = new Color(value);
+    const srgb = c.to("srgb");
+    const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n * 255))).toString(16).padStart(2, "0");
+    return `#${toHex(srgb.coords[0])}${toHex(srgb.coords[1])}${toHex(srgb.coords[2])}`;
   } catch {
     return "#000000";
   }
 }
 
-// Convert hex back to oklch for CSS variable
-function hexToOklch(hex: string): string {
-  try {
-    const c = new Color(hex);
-    const oklch = c.to("oklch");
-    const l = oklch.coords[0]?.toFixed(3) ?? "0";
-    const ch = oklch.coords[1]?.toFixed(3) ?? "0";
-    const h = oklch.coords[2]?.toFixed(1) ?? "0";
-    return `oklch(${l} ${ch} ${h})`;
-  } catch {
-    return hex;
+function readTokens(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const style = getComputedStyle(document.documentElement);
+  const tokens: Record<string, string> = {};
+  for (const name of TOKEN_NAMES) {
+    const raw = style.getPropertyValue(name).trim();
+    tokens[name] = cssToHex(raw);
   }
+  // Read radius as a number
+  tokens["--radius"] = style.getPropertyValue("--radius").trim();
+  return tokens;
 }
 
-function readCSSVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
+function useThemeTinker() {
+  const [defaults, setDefaults] = useState<Record<string, string>>({});
+  const [mounted, setMounted] = useState(false);
+  const userEdited = useRef<Set<string>>(new Set());
 
-function setCSSVar(name: string, value: string) {
-  document.documentElement.style.setProperty(name, value);
-}
-
-const COLOR_VARS = [
-  { var: "--background", label: "Background" },
-  { var: "--foreground", label: "Foreground" },
-  { var: "--primary", label: "Primary" },
-  { var: "--primary-foreground", label: "Primary FG" },
-  { var: "--secondary", label: "Secondary" },
-  { var: "--secondary-foreground", label: "Secondary FG" },
-  { var: "--accent", label: "Accent" },
-  { var: "--muted", label: "Muted" },
-  { var: "--destructive", label: "Destructive" },
-  { var: "--border", label: "Border" },
-  { var: "--ring", label: "Ring" },
-  { var: "--chart-1", label: "Chart 1" },
-  { var: "--chart-2", label: "Chart 2" },
-  { var: "--chart-3", label: "Chart 3" },
-];
-
-export function ThemeTinker({ enabled }: { enabled: boolean }) {
-  const originals = useRef<Record<string, string>>({});
-
-  // Capture original values on mount
+  // Read tokens and re-read on dark mode toggle
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const orig: Record<string, string> = {};
-    COLOR_VARS.forEach(({ var: v }) => {
-      orig[v] = readCSSVar(v);
-    });
-    orig["--radius"] = readCSSVar("--radius");
-    originals.current = orig;
+    const read = () => {
+      // Remove any user overrides before reading defaults
+      for (const name of TOKEN_NAMES) {
+        document.documentElement.style.removeProperty(name);
+      }
+      document.documentElement.style.removeProperty("--radius");
+      userEdited.current.clear();
+      setDefaults(readTokens());
+    };
+    read();
+    setMounted(true);
+
+    // Watch for dark mode toggle (class change on <html>)
+    const observer = new MutationObserver(read);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
-  // Build color controls
-  const colorControls: Record<string, unknown> = {};
-  COLOR_VARS.forEach(({ var: v, label }) => {
-    colorControls[label] = {
-      value: typeof window !== "undefined" ? cssToHex(readCSSVar(v)) : "#000000",
-      onChange: (hex: string) => {
-        setCSSVar(v, hexToOklch(hex));
-      },
-    };
-  });
+  // Build Leva schema from defaults
+  const colorSchema: Record<string, unknown> = {};
+  for (const name of TOKEN_NAMES) {
+    const label = name.replace("--", "");
+    colorSchema[label] = { value: defaults[name] ?? "#000000" };
+  }
 
-  useControls(
-    {
-      Colors: folder(colorControls),
-      Radius: {
-        value: typeof window !== "undefined" ? parseFloat(readCSSVar("--radius")) || 0.625 : 0.625,
+  const [values, set] = useControls(
+    "Colors",
+    () => colorSchema,
+    { collapsed: false },
+    [mounted]
+  );
+
+  const [radiusValues] = useControls(
+    "Layout",
+    () => ({
+      radius: {
+        value: parseFloat(defaults["--radius"] || "0.625"),
         min: 0,
         max: 2,
         step: 0.025,
-        onChange: (v: number) => setCSSVar("--radius", `${v}rem`),
+        label: "Radius (rem)",
       },
-      " ": button(() => {
-        // Reset all to originals
-        Object.entries(originals.current).forEach(([k, v]) => {
-          document.documentElement.style.removeProperty(k);
-        });
-      }, { label: "Reset to Default" } as never),
-    },
-    { collapsed: false }
+    }),
+    { collapsed: false },
+    [mounted]
   );
 
+  // Sync Leva values when defaults change (dark mode toggle)
+  useEffect(() => {
+    if (Object.keys(defaults).length > 0) {
+      const update: Record<string, string> = {};
+      for (const name of TOKEN_NAMES) {
+        const label = name.replace("--", "");
+        update[label] = defaults[name] ?? "#000000";
+      }
+      set(update);
+    }
+  }, [defaults, set]);
+
+  // Apply user edits to CSS
+  const prevValues = useRef<Record<string, unknown>>({});
+  useEffect(() => {
+    for (const [key, val] of Object.entries(values)) {
+      if (!val) continue;
+      const prev = prevValues.current[key];
+      const def = defaults[`--${key}`];
+      const valStr = JSON.stringify(val);
+      const prevStr = JSON.stringify(prev);
+
+      // Track if user manually changed this
+      if (prev !== undefined && prevStr !== valStr && val !== def) {
+        userEdited.current.add(key);
+      }
+
+      // Only apply user-edited values
+      if (userEdited.current.has(key) && typeof val === "string") {
+        // Convert hex back to oklch for CSS
+        try {
+          const c = new Color(val);
+          const oklch = c.to("oklch");
+          const l = oklch.coords[0]?.toFixed(3) ?? "0";
+          const ch = oklch.coords[1]?.toFixed(3) ?? "0";
+          const h = oklch.coords[2]?.toFixed(1) ?? "0";
+          document.documentElement.style.setProperty(`--${key}`, `oklch(${l} ${ch} ${h})`);
+        } catch {
+          document.documentElement.style.setProperty(`--${key}`, val);
+        }
+      }
+    }
+    prevValues.current = { ...values };
+  }, [values, defaults]);
+
+  // Apply radius
+  useEffect(() => {
+    if (radiusValues.radius !== parseFloat(defaults["--radius"] || "0.625")) {
+      document.documentElement.style.setProperty("--radius", `${radiusValues.radius}rem`);
+    }
+  }, [radiusValues.radius, defaults]);
+}
+
+export function ThemeTinker({ enabled }: { enabled: boolean }) {
+  useThemeTinker();
   return <Leva hidden={!enabled} collapsed={false} />;
 }
