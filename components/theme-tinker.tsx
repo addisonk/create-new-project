@@ -155,6 +155,10 @@ function useThemeTinker(colorTokens: ColorTokens) {
         value: "Inherit",
         options: ["Inherit", ...Object.keys({ ...SERIF_FONTS, ...SANS_FONTS })],
         onChange: (v: string) => {
+          // Remove heading style tag if it exists
+          const existingStyle = document.getElementById("dsv-heading-font");
+          if (existingStyle) existingStyle.remove();
+
           if (v === "Inherit") {
             document.documentElement.style.removeProperty("--font-heading");
             document.documentElement.style.removeProperty("--font-serif");
@@ -166,9 +170,20 @@ function useThemeTinker(colorTokens: ColorTokens) {
             loadGoogleFont(v, slug);
             const fallback = v in SERIF_FONTS ? "serif" : "sans-serif";
             const fontValue = `"${v}", ${fallback}`;
-            // Set both variables — some themes use --font-heading, others --font-serif
             document.documentElement.style.setProperty("--font-heading", fontValue);
             document.documentElement.style.setProperty("--font-serif", fontValue);
+
+            // Inject a style tag to force headings + font-serif to use the heading font
+            const style = document.createElement("style");
+            style.id = "dsv-heading-font";
+            style.textContent = `
+              .font-serif, .font-heading,
+              h1, h2, h3, h4, h5, h6,
+              [class*="cn-font-heading"] {
+                font-family: ${fontValue} !important;
+              }
+            `;
+            document.head.appendChild(style);
           }
         },
       },

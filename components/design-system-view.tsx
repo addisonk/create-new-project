@@ -124,6 +124,11 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
             />
           </React.Fragment>
         ))}
+
+        {/* Show heading font section if one is added via tinker (and not already in config) */}
+        {!config.fonts.some(f => f.label === "Heading") && (
+          <DynamicHeadingSection />
+        )}
       </section>
       </>}
 
@@ -349,6 +354,53 @@ function RadiusBlock({ cls, label, cssVar, value }: { cls: string; label: string
         <span className="block font-mono text-[10px] text-muted-foreground">{resolved}</span>
       </div>
     </div>
+  );
+}
+
+function DynamicHeadingSection() {
+  const [headingFont, setHeadingFont] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const check = () => {
+      const val = document.documentElement.style.getPropertyValue("--font-heading");
+      if (val && val.trim()) {
+        const name = val.split(",")[0].trim().replace(/['"]/g, "");
+        setHeadingFont(name);
+      } else {
+        setHeadingFont(null);
+      }
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
+
+  if (!headingFont) return null;
+
+  return (
+    <>
+      <Separator className="mb-24" />
+      <div className="mb-24 last:mb-0">
+        <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">Heading</p>
+        <div className="text-6xl font-bold md:text-8xl mb-8" style={{ fontFamily: `"${headingFont}", serif` }}>{headingFont}</div>
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
+          <div className="text-[180px] leading-[0.8]" style={{ fontFamily: `"${headingFont}", serif` }}>Aa</div>
+          <div>
+            <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Preview</p>
+            <p className="text-xl leading-relaxed" style={{ fontFamily: `"${headingFont}", serif` }}>
+              Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz
+            </p>
+          </div>
+          <div>
+            <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Numbers</p>
+            <p className="text-xl font-medium" style={{ fontFamily: `"${headingFont}", serif` }}>
+              0 1 2 3 4 5 6 7 8 9
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
