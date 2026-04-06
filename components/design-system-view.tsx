@@ -380,9 +380,9 @@ function FontSection({
   return (
     <div className="mb-24 last:mb-0">
       <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
-      <div ref={ref} className={`${fontClass} text-6xl font-bold tracking-tight md:text-8xl mb-8`}>{displayName}</div>
+      <div ref={ref} className={`${fontClass} text-6xl font-bold md:text-8xl mb-8`}>{displayName}</div>
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
-        <div className={`${fontClass} text-[180px] leading-[0.8] tracking-tight`}>Aa</div>
+        <div className={`${fontClass} text-[180px] leading-[0.8]`}>Aa</div>
         <div>
           <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Weights</p>
           <div className={`${fontClass} space-y-2`}>
