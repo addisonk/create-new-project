@@ -314,6 +314,63 @@ function useThemeTinker(colorTokens: ColorTokens) {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, [applyOverrides]);
+
+  return { values, userEdited };
+}
+
+function levaColorToOklch(val: LevaColor): string {
+  try {
+    if (typeof val === "object" && "r" in val) {
+      const { r, g, b, a } = val;
+      const c = new Color("srgb", [r / 255, g / 255, b / 255], a);
+      const oklch = c.to("oklch");
+      const alpha = a != null && a < 1 ? ` / ${Math.round(a * 100)}%` : "";
+      return `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)}${alpha})`;
+    } else if (typeof val === "string") {
+      const c = new Color(val);
+      const oklch = c.to("oklch");
+      return `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`;
+    }
+  } catch {}
+  return String(val);
+}
+
+async function saveTheme(
+  values: Record<string, unknown>,
+  userEdited: Set<string>,
+  colorTokens: ColorTokens
+) {
+  const light: Record<string, string> = {};
+  const dark: Record<string, string> = {};
+  let radius: string | undefined;
+
+  for (const key of userEdited) {
+    const val = values[key];
+    if (!val) continue;
+
+    if (key === "Radius") {
+      radius = `${val}rem`;
+      continue;
+    }
+
+    const isForDark = key.startsWith("dk:");
+    const cssKey = isForDark ? key.slice(3) : key;
+    const oklch = levaColorToOklch(val as LevaColor);
+
+    if (isForDark) {
+      dark[cssKey] = oklch;
+    } else {
+      light[cssKey] = oklch;
+    }
+  }
+
+  const res = await fetch("/api/save-theme", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ light, dark, radius }),
+  });
+
+  return res.json();
 }
 
 export function ThemeTinker({
@@ -323,6 +380,41 @@ export function ThemeTinker({
   enabled: boolean;
   colorTokens: ColorTokens;
 }) {
-  useThemeTinker(colorTokens);
-  return <Leva hidden={!enabled} collapsed={false} />;
+  const { values, userEdited } = useThemeTinker(colorTokens);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  const handleSave = async () => {
+    if (userEdited.current.size === 0) return;
+    setSaving(true);
+    try {
+      const result = await saveTheme(values, userEdited.current, colorTokens);
+      if (result.success) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        console.error("Save failed:", result.error);
+      }
+    } catch (err) {
+      console.error("Save failed:", err);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <>
+      <Leva hidden={!enabled} collapsed={false} />
+      {enabled && userEdited.current.size > 0 && (
+        <div className="fixed bottom-6 left-6 z-50">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving ? "Saving..." : saved ? "✓ Saved!" : `Save Theme (${userEdited.current.size} changes)`}
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
