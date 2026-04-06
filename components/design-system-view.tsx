@@ -226,8 +226,8 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         <div>
           <div className="relative overflow-hidden rounded-2xl ring ring-foreground/10 dark:ring-foreground/10">
             <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl shadow-[inset_0px_0px_17px_10px_var(--muted)] dark:shadow-[inset_0px_0px_17px_10px_var(--background)]" />
-            <div className="relative rounded-2xl bg-muted dark:bg-muted/30">
-              <div className="h-[80vh] overflow-scroll p-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="relative rounded-2xl bg-muted dark:bg-background">
+              <div className="h-[80vh] overflow-scroll [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <BlockErrorBoundary>
                   <React.Suspense
                     fallback={

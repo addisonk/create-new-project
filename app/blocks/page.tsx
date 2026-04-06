@@ -52,7 +52,7 @@ export default function BlocksPage() {
       {/* Preview container — rounded with ring, scrollable with hidden scrollbar */}
       <div className="mx-6 mt-4 md:mx-10">
         <div className="relative overflow-hidden rounded-2xl ring ring-foreground/10 dark:ring-foreground/10">
-          <div className="relative bg-muted dark:bg-muted/30">
+          <div className="relative bg-muted dark:bg-background">
             <div className="h-[80vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               <BlockErrorBoundary>
                 <React.Suspense
