@@ -353,14 +353,34 @@ function RadiusBlock({ cls, label, cssVar, value }: { cls: string; label: string
 }
 
 function FontSection({
-  fontClass, name, label, weights,
+  fontClass, name: defaultName, label, weights,
 }: {
   fontClass: string; name: string; label: string; weights: string[];
 }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [displayName, setDisplayName] = React.useState(defaultName);
+
+  React.useEffect(() => {
+    const update = () => {
+      if (!ref.current) return;
+      const computed = window.getComputedStyle(ref.current).fontFamily;
+      // Extract the first font name, strip quotes
+      const first = computed.split(",")[0].trim().replace(/['"]/g, "");
+      if (first && first !== "serif" && first !== "sans-serif" && first !== "monospace") {
+        setDisplayName(first);
+      }
+    };
+    update();
+    // Watch for style changes (tinker modifying CSS vars)
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="mb-24 last:mb-0">
       <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
-      <div className={`${fontClass} text-6xl font-bold tracking-tight md:text-8xl mb-8`}>{name}</div>
+      <div ref={ref} className={`${fontClass} text-6xl font-bold tracking-tight md:text-8xl mb-8`}>{displayName}</div>
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
         <div className={`${fontClass} text-[180px] leading-[0.8] tracking-tight`}>Aa</div>
         <div>
