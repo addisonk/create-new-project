@@ -382,13 +382,19 @@ export function ThemeTinker({
 }) {
   const { values, userEdited } = useThemeTinker(colorTokens);
   const savingRef = React.useRef(false);
+  const valuesRef = React.useRef(values);
+  valuesRef.current = values;
 
   useControls({
     "💾 Save to globals.css": button(async () => {
-      if (savingRef.current || userEdited.current.size === 0) return;
+      if (savingRef.current) return;
+      if (userEdited.current.size === 0) {
+        alert("No changes to save — tweak some colors first.");
+        return;
+      }
       savingRef.current = true;
       try {
-        const result = await saveTheme(values, userEdited.current, colorTokens);
+        const result = await saveTheme(valuesRef.current, userEdited.current, colorTokens);
         if (result.success) {
           alert("✓ Theme saved to globals.css!");
         } else {
