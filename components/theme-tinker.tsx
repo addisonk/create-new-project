@@ -85,6 +85,7 @@ const SERIF_FONTS: Record<string, string> = {
   "Merriweather": "Merriweather",
   "Lora": "Lora",
   "Playfair Display": "Playfair+Display",
+  "Instrument Serif": "Instrument+Serif",
 };
 
 const MONO_FONTS: Record<string, string> = {
@@ -132,23 +133,31 @@ function useThemeTinker(colorTokens: ColorTokens) {
     "Typography": folder({
       "Body Font": {
         value: Object.keys(SANS_FONTS)[0],
-        options: Object.keys(SANS_FONTS),
+        options: Object.keys({ ...SANS_FONTS, ...SERIF_FONTS }),
         onChange: (v: string) => {
-          const slug = SANS_FONTS[v];
+          const allFonts = { ...SANS_FONTS, ...SERIF_FONTS };
+          const slug = allFonts[v];
           if (slug) {
             loadGoogleFont(v, slug);
-            document.documentElement.style.setProperty("--font-sans", `"${v}", sans-serif`);
+            const fallback = v in SERIF_FONTS ? "serif" : "sans-serif";
+            document.documentElement.style.setProperty("--font-sans", `"${v}", ${fallback}`);
           }
         },
       },
       "Heading Font": {
-        value: Object.keys({ ...SANS_FONTS, ...SERIF_FONTS })[0],
-        options: Object.keys({ ...SANS_FONTS, ...SERIF_FONTS }),
+        value: "Inherit",
+        options: ["Inherit", ...Object.keys({ ...SERIF_FONTS, ...SANS_FONTS })],
         onChange: (v: string) => {
-          const slug = { ...SANS_FONTS, ...SERIF_FONTS }[v];
+          if (v === "Inherit") {
+            document.documentElement.style.removeProperty("--font-heading");
+            return;
+          }
+          const allFonts = { ...SERIF_FONTS, ...SANS_FONTS };
+          const slug = allFonts[v];
           if (slug) {
             loadGoogleFont(v, slug);
-            document.documentElement.style.setProperty("--font-heading", `"${v}", serif`);
+            const fallback = v in SERIF_FONTS ? "serif" : "sans-serif";
+            document.documentElement.style.setProperty("--font-heading", `"${v}", ${fallback}`);
           }
         },
       },
