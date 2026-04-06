@@ -60,7 +60,7 @@ function useThemeTinker(colorTokens: ColorTokens) {
   const prevValues = useRef<Record<string, unknown>>({});
 
   const [values] = useControls(() => ({
-    "Light Mode": folder(lightSchema, { collapsed: false }),
+    "Light Mode": folder(lightSchema, { collapsed: true }),
     "Dark Mode": folder(darkSchema, { collapsed: true }),
     "Radius": {
       value: 0.625,
