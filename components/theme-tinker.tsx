@@ -404,14 +404,14 @@ export function ThemeTinker({
   return (
     <>
       <Leva hidden={!enabled} collapsed={false} />
-      {enabled && userEdited.current.size > 0 && (
+      {enabled && (
         <div className="fixed bottom-6 left-6 z-50">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || userEdited.current.size === 0}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
-            {saving ? "Saving..." : saved ? "✓ Saved!" : `Save Theme (${userEdited.current.size} changes)`}
+            {saving ? "Saving..." : saved ? "✓ Saved to globals.css!" : "Save Theme"}
           </button>
         </div>
       )}
