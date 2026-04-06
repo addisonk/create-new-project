@@ -205,14 +205,29 @@ function useThemeTinker(colorTokens: ColorTokens) {
         options: Object.keys(SHADOW_PRESETS),
         onChange: (v: string) => {
           const shadow = SHADOW_PRESETS[v];
-          if (shadow) {
-            // Set all shadow scale variables
-            const val = shadow === "none" ? "0 0 #0000" : shadow;
-            document.documentElement.style.setProperty("--shadow-sm", val);
-            document.documentElement.style.setProperty("--shadow", val);
-            document.documentElement.style.setProperty("--shadow-md", val);
-            document.documentElement.style.setProperty("--shadow-lg", val);
-            document.documentElement.style.setProperty("--shadow-xl", val);
+          if (!shadow) return;
+
+          // Remove previous shadow style tag
+          const existing = document.getElementById("dsv-shadow");
+          if (existing) existing.remove();
+
+          if (shadow === "none") {
+            const style = document.createElement("style");
+            style.id = "dsv-shadow";
+            style.textContent = `
+              [class*="shadow"] { box-shadow: none !important; }
+            `;
+            document.head.appendChild(style);
+          } else {
+            const style = document.createElement("style");
+            style.id = "dsv-shadow";
+            style.textContent = `
+              .shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl,
+              [class*="cn-card"] {
+                box-shadow: ${shadow} !important;
+              }
+            `;
+            document.head.appendChild(style);
           }
         },
       },
