@@ -9,7 +9,9 @@ import Color from "colorjs.io";
 import type { DesignSystemConfig } from "@/lib/config";
 // Icons are handled via static imports in the IconPlaceholder stubs
 // The /create-new-project skill swaps the import to match the project's iconLibrary
-import { ThemeTinker } from "@/components/theme-tinker";
+import { ThemeTinker, useThemeTinker, ThemeEditorProvider, useThemeEditor } from "@/components/theme-tinker";
+import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover";
+import Sketch from "@uiw/react-color-sketch";
 import Preview02 from "@/components/blocks/preview-02/index";
 
 const Preview = React.lazy(() => import("@/components/blocks/preview/index"));
@@ -48,6 +50,7 @@ export function DesignSystemView({ config }: { config: DesignSystemConfig }) {
 function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
   const [activePreview, setActivePreview] = React.useState<1 | 2>(2);
   const [tinkerOpen, setTinkerOpen] = React.useState(false);
+  const editor = useThemeTinker(config.colorTokens);
   const searchParams = useSearchParams();
   const router = useRouter();
   const filter = searchParams.get("section") as "type" | "color" | "radius" | "blocks" | null;
@@ -70,6 +73,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
   ];
 
   return (
+    <ThemeEditorProvider value={{ editor, tinkerOpen, setTinkerOpen }}>
     <main>
       {/* Header */}
       <div className="container mx-auto max-w-7xl px-6 py-16 md:px-10">
@@ -103,7 +107,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
       </div>
 
-      <ThemeTinker enabled={tinkerOpen} colorTokens={config.colorTokens} />
+      <ThemeTinker enabled={tinkerOpen} colorTokens={config.colorTokens} editor={editor} />
 
       {/* ─── Typography ─── */}
       {show("type") && <>
@@ -264,8 +268,89 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </div>
       </section>
       </>}
+
+      <SaveBar />
     </main>
+    </ThemeEditorProvider>
   );
+}
+
+// ─── Save Bar ───
+
+function SaveBar() {
+  const ctx = useThemeEditor();
+  const [saving, setSaving] = React.useState(false);
+  const visible = (ctx?.editor.changeCount ?? 0) > 0;
+
+  const handleSave = async () => {
+    if (!ctx || saving) return;
+    setSaving(true);
+    await ctx.editor.save();
+    setSaving(false);
+  };
+
+  return (
+    <div
+      className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ${
+        visible ? "translate-y-0" : "translate-y-full"
+      }`}
+    >
+      <div className="border-t border-border bg-muted">
+        <div className="container mx-auto flex max-w-7xl items-center justify-between px-6 py-3 md:px-10">
+          <p className="text-sm text-muted-foreground">
+            {ctx?.editor.changeCount ?? 0} unsaved {ctx?.editor.changeCount === 1 ? "change" : "changes"}
+          </p>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="lg" onClick={() => ctx?.editor.revert()}>
+              Revert
+            </Button>
+            <Button size="lg" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Helpers ───
+
+const PRESET_KEYS = [
+  "background", "foreground", "primary", "secondary", "accent", "muted",
+  "destructive", "border", "card", "ring",
+  "chart-1", "chart-2", "chart-3", "chart-4", "chart-5",
+  "sidebar", "sidebar-primary", "sidebar-accent",
+];
+
+function getThemePresetColors(): string[] {
+  const style = getComputedStyle(document.documentElement);
+  const colors: string[] = [];
+  for (const key of PRESET_KEYS) {
+    const val = style.getPropertyValue(`--${key}`).trim();
+    if (!val) continue;
+    try {
+      colors.push(new Color(val).to("srgb").toString({ format: "hex" }));
+    } catch {}
+  }
+  return colors;
+}
+
+function useDebouncedLevaSync() {
+  const ctx = useThemeEditor();
+  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+
+  return React.useCallback((key: string, hex: string) => {
+    // Instant: set CSS variable directly for zero-lag preview
+    const cssKey = key.startsWith("dk:") ? key.slice(3) : key;
+    document.documentElement.style.setProperty(`--${cssKey}`, hex);
+
+    // Debounced: sync to Leva store (triggers change tracking for save)
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      ctx?.editor.set({ [key]: hex });
+    }, 150);
+  }, [ctx]);
 }
 
 // ─── Sub-components ───
@@ -275,14 +360,59 @@ function PaletteBlock({
 }: {
   bg: string; fg: string; name: string; span?: string; height?: number;
 }) {
+  const ctx = useThemeEditor();
+  const syncColor = useDebouncedLevaSync();
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [open, setOpen] = React.useState(false);
+  const [pickerColor, setPickerColor] = React.useState("#888888");
+  const [presets, setPresets] = React.useState<string[]>([]);
   const fgName = fg.replace("text-", "");
+  const tokenKey = bg.replace("bg-", "");
+
+  const label = (
+    <span className={`absolute bottom-2 left-2 ${bg} ${fg} rounded px-2 py-1`}>
+      <p className="text-sm font-medium">{name}</p>
+      <p className="text-xs opacity-80">{fgName}</p>
+    </span>
+  );
+
   return (
-    <div className={`relative ${bg} ${span ?? ""}`} style={{ minHeight: height }}>
-      <span className={`absolute bottom-2 left-2 ${bg} ${fg} rounded px-2 py-1`}>
-        <p className="text-sm font-medium">{name}</p>
-        <p className="text-xs opacity-80">{fgName}</p>
-      </span>
-    </div>
+    <Popover open={open} onOpenChange={(isOpen) => {
+      if (isOpen) {
+        if (!ctx?.tinkerOpen) ctx?.setTinkerOpen(true);
+        if (ref.current) {
+          try {
+            const c = new Color(window.getComputedStyle(ref.current).backgroundColor);
+            setPickerColor(c.to("srgb").toString({ format: "hex" }));
+          } catch {}
+        }
+        setPresets(getThemePresetColors());
+      }
+      setOpen(isOpen);
+    }}>
+      <PopoverTrigger asChild>
+        <div
+          ref={ref}
+          className={`relative ${bg} ${span ?? ""} cursor-pointer transition-opacity hover:opacity-90`}
+          style={{ minHeight: height }}
+        >
+          {label}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
+        <Sketch
+          color={pickerColor}
+          disableAlpha
+          presetColors={presets}
+          onChange={(color) => {
+            const isDark = document.documentElement.classList.contains("dark");
+            const key = isDark ? `dk:${tokenKey}` : tokenKey;
+            syncColor(key, color.hex);
+            setPickerColor(color.hex);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -312,8 +442,14 @@ function getContrastTextColor(fgColor: string, pageBgColor: string): string {
 }
 
 function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
+  const ctx = useThemeEditor();
+  const syncColor = useDebouncedLevaSync();
   const ref = React.useRef<HTMLDivElement>(null);
   const [textColor, setTextColor] = React.useState<string | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const [pickerColor, setPickerColor] = React.useState("#888888");
+  const [presets, setPresets] = React.useState<string[]>([]);
+  const tokenKey = bg.replace("bg-", "");
 
   React.useEffect(() => {
     const update = () => {
@@ -331,15 +467,52 @@ function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
     return () => observer.disconnect();
   }, []);
 
+  const label = (
+    <p
+      className="absolute bottom-2 left-2 text-sm font-medium"
+      style={{ color: textColor ?? "transparent" }}
+    >
+      {name}
+    </p>
+  );
+
   return (
-    <div ref={ref} className={`relative ${bg}`} style={{ minHeight: 100 }}>
-      <p
-        className="absolute bottom-2 left-2 text-sm font-medium"
-        style={{ color: textColor ?? "transparent" }}
-      >
-        {name}
-      </p>
-    </div>
+    <Popover open={open} onOpenChange={(isOpen) => {
+      if (isOpen) {
+        if (!ctx?.tinkerOpen) ctx?.setTinkerOpen(true);
+        if (ref.current) {
+          try {
+            const c = new Color(window.getComputedStyle(ref.current).backgroundColor);
+            setPickerColor(c.to("srgb").toString({ format: "hex" }));
+          } catch {}
+        }
+        setPresets(getThemePresetColors());
+      }
+      setOpen(isOpen);
+    }}>
+      <PopoverTrigger asChild>
+        <div
+          ref={ref}
+          className={`relative ${bg} cursor-pointer transition-opacity hover:opacity-90`}
+          style={{ minHeight: 100 }}
+        >
+          {label}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
+        <Sketch
+          color={pickerColor}
+          disableAlpha
+          presetColors={presets}
+          onChange={(color) => {
+            const isDark = document.documentElement.classList.contains("dark");
+            const key = isDark ? `dk:${tokenKey}` : tokenKey;
+            syncColor(key, color.hex);
+            setPickerColor(color.hex);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 

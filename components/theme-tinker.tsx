@@ -1,11 +1,27 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
-import { useControls, folder, button, Leva } from "leva";
+import React, { useEffect, useRef, useCallback, createContext, useContext } from "react";
+import { useControls, folder, Leva } from "leva";
 import Color from "colorjs.io";
+import { toast } from "sonner";
 import type { ColorTokens } from "@/lib/config";
 
 type LevaColor = string | { r: number; g: number; b: number; a: number };
+
+export interface ThemeEditor {
+  values: Record<string, unknown>;
+  userEdited: React.MutableRefObject<Set<string>>;
+  set: (values: Record<string, unknown>) => void;
+  changeCount: number;
+  save: () => Promise<void>;
+  revert: () => void;
+}
+
+const ThemeEditorContext = createContext<{ editor: ThemeEditor; tinkerOpen: boolean; setTinkerOpen: (open: boolean) => void } | null>(null);
+export const ThemeEditorProvider = ThemeEditorContext.Provider;
+export function useThemeEditor() {
+  return useContext(ThemeEditorContext);
+}
 
 function oklchToLeva(value: string): LevaColor {
   try {
@@ -142,13 +158,14 @@ function loadGoogleFont(fontName: string, slug: string) {
   document.head.appendChild(link);
 }
 
-function useThemeTinker(colorTokens: ColorTokens) {
+export function useThemeTinker(colorTokens: ColorTokens) {
   const lightSchema = buildColorSchema(colorTokens.light, "light");
   const darkSchema = buildColorSchema(colorTokens.dark, "dark");
   const userEdited = useRef<Set<string>>(new Set());
   const prevValues = useRef<Record<string, unknown>>({});
+  const [changeCount, setChangeCount] = React.useState(0);
 
-  const [values] = useControls(() => ({
+  const [values, set] = useControls(() => ({
     "Typography": folder({
       "Body Font": {
         value: Object.keys(SANS_FONTS)[0],
@@ -258,9 +275,14 @@ function useThemeTinker(colorTokens: ColorTokens) {
     "Dark Mode": folder(darkSchema, { collapsed: true }),
   }), []);
 
-  // Apply overrides for the current mode only
+  // Ref for values so applyOverrides stays stable
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+
+  // Apply overrides for the current mode only (stable — reads values via ref)
   const applyOverrides = useCallback(() => {
     const isDark = document.documentElement.classList.contains("dark");
+    const currentValues = valuesRef.current;
 
     // Clear ALL color overrides first
     for (const key of COLOR_KEYS) {
@@ -273,7 +295,7 @@ function useThemeTinker(colorTokens: ColorTokens) {
       const isForDark = editedKey.startsWith("dk:");
 
       if ((isDark && isForDark) || (!isDark && !isForDark)) {
-        const val = values[editedKey];
+        const val = currentValues[editedKey];
         if (!val) continue;
 
         if (typeof val === "object" && "r" in val) {
@@ -293,7 +315,7 @@ function useThemeTinker(colorTokens: ColorTokens) {
         }
       }
     }
-  }, [values]);
+  }, []);
 
   // Track user edits
   useEffect(() => {
@@ -305,6 +327,7 @@ function useThemeTinker(colorTokens: ColorTokens) {
       }
     }
     prevValues.current = { ...values };
+    setChangeCount(userEdited.current.size);
     applyOverrides();
   }, [values, applyOverrides]);
 
@@ -315,7 +338,46 @@ function useThemeTinker(colorTokens: ColorTokens) {
     return () => observer.disconnect();
   }, [applyOverrides]);
 
-  return { values, userEdited };
+  // Save changes to globals.css
+  const save = useCallback(async () => {
+    if (userEdited.current.size === 0) return;
+    try {
+      const result = await saveTheme(valuesRef.current, userEdited.current, colorTokens);
+      if (result.success) {
+        toast.success("Theme saved to globals.css");
+        userEdited.current.clear();
+        setChangeCount(0);
+      } else {
+        toast.error("Save failed: " + result.error);
+      }
+    } catch (err) {
+      toast.error("Save failed: " + err);
+    }
+  }, [colorTokens]);
+
+  // Revert all changes
+  const revert = useCallback(() => {
+    // Clear all inline CSS overrides
+    for (const key of COLOR_KEYS) {
+      document.documentElement.style.removeProperty(`--${key}`);
+    }
+    // Reset Leva values to originals
+    const resets: Record<string, LevaColor> = {};
+    for (const editedKey of userEdited.current) {
+      if (editedKey === "Radius") continue;
+      const isForDark = editedKey.startsWith("dk:");
+      const cssKey = isForDark ? editedKey.slice(3) : editedKey;
+      const tokens = isForDark ? colorTokens.dark : colorTokens.light;
+      if (tokens[cssKey]) {
+        resets[editedKey] = oklchToLeva(tokens[cssKey]);
+      }
+    }
+    if (Object.keys(resets).length > 0) set(resets);
+    userEdited.current.clear();
+    setChangeCount(0);
+  }, [colorTokens, set]);
+
+  return { values, userEdited, set, changeCount, save, revert };
 }
 
 function levaColorToOklch(val: LevaColor): string {
@@ -375,37 +437,10 @@ async function saveTheme(
 
 export function ThemeTinker({
   enabled,
-  colorTokens,
 }: {
   enabled: boolean;
   colorTokens: ColorTokens;
+  editor: ThemeEditor;
 }) {
-  const { values, userEdited } = useThemeTinker(colorTokens);
-  const savingRef = React.useRef(false);
-  const valuesRef = React.useRef(values);
-  valuesRef.current = values;
-
-  useControls({
-    "💾 Save to globals.css": button(async () => {
-      if (savingRef.current) return;
-      if (userEdited.current.size === 0) {
-        alert("No changes to save — tweak some colors first.");
-        return;
-      }
-      savingRef.current = true;
-      try {
-        const result = await saveTheme(valuesRef.current, userEdited.current, colorTokens);
-        if (result.success) {
-          alert("✓ Theme saved to globals.css!");
-        } else {
-          alert("Save failed: " + result.error);
-        }
-      } catch (err) {
-        alert("Save failed: " + err);
-      }
-      savingRef.current = false;
-    }),
-  });
-
   return <Leva hidden={!enabled} collapsed={false} />;
 }
