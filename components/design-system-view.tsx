@@ -113,9 +113,20 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
           Typography
         </h2>
 
-        {config.fonts.map((font, i) => (
+        {/* Heading font first — dynamic if added via tinker */}
+        {!config.fonts.some(f => f.label === "Heading") && (
+          <DynamicHeadingSection />
+        )}
+
+        {/* Sort: Heading first, then Body, then Mono */}
+        {config.fonts
+          .sort((a, b) => {
+            const order = ["Heading", "Body", "Mono"];
+            return order.indexOf(a.label) - order.indexOf(b.label);
+          })
+          .map((font, i, arr) => (
           <React.Fragment key={font.variable}>
-            {i > 0 && <Separator className="mb-24" />}
+            {(i > 0 || !config.fonts.some(f => f.label === "Heading")) && <Separator className="mb-24" />}
             <FontSection
               fontClass={font.fontClass}
               name={font.name}
@@ -124,11 +135,6 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
             />
           </React.Fragment>
         ))}
-
-        {/* Show heading font section if one is added via tinker (and not already in config) */}
-        {!config.fonts.some(f => f.label === "Heading") && (
-          <DynamicHeadingSection />
-        )}
       </section>
       </>}
 
