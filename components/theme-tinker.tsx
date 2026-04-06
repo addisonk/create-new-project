@@ -58,6 +58,70 @@ function buildColorSchema(
   return schema;
 }
 
+// ─── Font options from shadcn ───
+const SANS_FONTS: Record<string, string> = {
+  "Geist": "Geist",
+  "Inter": "Inter",
+  "DM Sans": "DM+Sans",
+  "Noto Sans": "Noto+Sans",
+  "Nunito Sans": "Nunito+Sans",
+  "Figtree": "Figtree",
+  "Roboto": "Roboto",
+  "Raleway": "Raleway",
+  "Public Sans": "Public+Sans",
+  "Outfit": "Outfit",
+  "Manrope": "Manrope",
+  "Space Grotesk": "Space+Grotesk",
+  "Montserrat": "Montserrat",
+  "IBM Plex Sans": "IBM+Plex+Sans",
+  "Source Sans 3": "Source+Sans+3",
+  "Instrument Sans": "Instrument+Sans",
+  "Oxanium": "Oxanium",
+};
+
+const SERIF_FONTS: Record<string, string> = {
+  "Noto Serif": "Noto+Serif",
+  "Roboto Slab": "Roboto+Slab",
+  "Merriweather": "Merriweather",
+  "Lora": "Lora",
+  "Playfair Display": "Playfair+Display",
+};
+
+const MONO_FONTS: Record<string, string> = {
+  "Geist Mono": "Geist+Mono",
+  "JetBrains Mono": "JetBrains+Mono",
+};
+
+// ─── Shadow presets ───
+const SHADOW_PRESETS: Record<string, string> = {
+  "None": "none",
+  "Tailwind SM": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+  "Tailwind MD": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+  "Tailwind LG": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+  "Tailwind XL": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+  "Tailwind 2XL": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
+  "Soft Glow": "0px 10px 20px 0px rgba(0, 0, 0, 0.1)",
+  "Subtle Depth": "0px 2px 8px 0px rgba(0, 0, 0, 0.08)",
+  "Floating": "0px 15px 35px -5px rgba(0, 0, 0, 0.1)",
+  "Soft Drop": "0px 4px 6px 0px rgba(0, 0, 0, 0.1)",
+  "Layered": "0px 8px 16px -2px rgba(0, 0, 0, 0.1)",
+  "Smoke": "0px 10px 50px -10px rgba(0, 0, 0, 0.1)",
+  "Organic Soft": "5px 5px 15px -3px rgba(0, 0, 0, 0.15)",
+  "Glassmorphism": "0px 4px 30px 0px rgba(31, 38, 135, 0.15)",
+  "Dark Elegance": "0px 8px 24px -4px rgba(255, 255, 255, 0.1)",
+  "Subtle Edge": "1px 1px 3px 0px rgba(0, 0, 0, 0.08)",
+};
+
+function loadGoogleFont(fontName: string, slug: string) {
+  const id = `gf-${slug}`;
+  if (document.getElementById(id)) return;
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${slug}:wght@100..900&display=swap`;
+  document.head.appendChild(link);
+}
+
 function useThemeTinker(colorTokens: ColorTokens) {
   const lightSchema = buildColorSchema(colorTokens.light, "light");
   const darkSchema = buildColorSchema(colorTokens.dark, "dark");
@@ -65,8 +129,57 @@ function useThemeTinker(colorTokens: ColorTokens) {
   const prevValues = useRef<Record<string, unknown>>({});
 
   const [values] = useControls(() => ({
-    "Light Mode": folder(lightSchema, { collapsed: true }),
-    "Dark Mode": folder(darkSchema, { collapsed: true }),
+    "Typography": folder({
+      "Body Font": {
+        value: Object.keys(SANS_FONTS)[0],
+        options: Object.keys(SANS_FONTS),
+        onChange: (v: string) => {
+          const slug = SANS_FONTS[v];
+          if (slug) {
+            loadGoogleFont(v, slug);
+            document.documentElement.style.setProperty("--font-sans", `"${v}", sans-serif`);
+          }
+        },
+      },
+      "Heading Font": {
+        value: Object.keys({ ...SANS_FONTS, ...SERIF_FONTS })[0],
+        options: Object.keys({ ...SANS_FONTS, ...SERIF_FONTS }),
+        onChange: (v: string) => {
+          const slug = { ...SANS_FONTS, ...SERIF_FONTS }[v];
+          if (slug) {
+            loadGoogleFont(v, slug);
+            document.documentElement.style.setProperty("--font-heading", `"${v}", serif`);
+          }
+        },
+      },
+      "Mono Font": {
+        value: Object.keys(MONO_FONTS)[0],
+        options: Object.keys(MONO_FONTS),
+        onChange: (v: string) => {
+          const slug = MONO_FONTS[v];
+          if (slug) {
+            loadGoogleFont(v, slug);
+            document.documentElement.style.setProperty("--font-mono", `"${v}", monospace`);
+          }
+        },
+      },
+    }, { collapsed: true }),
+    "Shadow": folder({
+      "Box Shadow": {
+        value: Object.keys(SHADOW_PRESETS)[0],
+        options: Object.keys(SHADOW_PRESETS),
+        onChange: (v: string) => {
+          const shadow = SHADOW_PRESETS[v];
+          if (shadow) {
+            document.documentElement.style.setProperty("--shadow", shadow);
+            // Also set common shadow scales
+            document.querySelectorAll("[class*=shadow]").forEach((el) => {
+              (el as HTMLElement).style.boxShadow = shadow === "none" ? "" : shadow;
+            });
+          }
+        },
+      },
+    }, { collapsed: true }),
     "Radius": {
       value: 0.625,
       min: 0,
@@ -77,6 +190,8 @@ function useThemeTinker(colorTokens: ColorTokens) {
         document.documentElement.style.setProperty("--radius", `${v}rem`);
       },
     },
+    "Light Mode": folder(lightSchema, { collapsed: true }),
+    "Dark Mode": folder(darkSchema, { collapsed: true }),
   }), []);
 
   // Apply overrides for the current mode only
