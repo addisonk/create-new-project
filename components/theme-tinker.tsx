@@ -68,6 +68,9 @@ function useThemeTinker(colorTokens: ColorTokens) {
       max: 2,
       step: 0.025,
       label: "Radius (rem)",
+      onChange: (v: number) => {
+        document.documentElement.style.setProperty("--radius", `${v}rem`);
+      },
     },
   }), []);
 
