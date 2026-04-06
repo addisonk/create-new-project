@@ -111,6 +111,18 @@ const SHADOW_PRESETS: Record<string, string> = {
   "Glassmorphism": "0px 4px 30px 0px rgba(31, 38, 135, 0.15)",
   "Dark Elegance": "0px 8px 24px -4px rgba(255, 255, 255, 0.1)",
   "Subtle Edge": "1px 1px 3px 0px rgba(0, 0, 0, 0.08)",
+  "Neon Dream": "0px 0px 20px 5px rgba(66, 220, 219, 0.5)",
+  "Neumorphic": "20px 20px 60px -15px rgba(255, 255, 255, 0.5)",
+  "Vivid Pop": "4px 4px 0px 0px rgba(255, 105, 180, 0.8)",
+  "Cosmic Glow": "0px 0px 40px 0px rgba(138, 43, 226, 0.4)",
+  "Neon Outline": "0px 0px 10px 2px rgba(0, 255, 255, 0.7)",
+  "Retro Pixel": "5px 5px 0px 0px rgba(0, 0, 0, 0.5)",
+  "Dreamy Pastel": "0px 10px 30px 0px rgba(255, 182, 193, 0.3)",
+  "Cyberpunk Edge": "-5px 5px 0px 0px rgba(255, 0, 0, 0.8)",
+  "Minimalist": "2px 2px 0px 0px rgba(0, 0, 0, 0.1)",
+  "Frosted Glass": "0px 4px 20px 0px rgba(255, 255, 255, 0.2)",
+  "Polaroid": "0px 8px 0px 0px rgba(0, 0, 0, 0.2)",
+  "Harsh Side": "8px 0px 4px -2px rgba(0, 0, 0, 0.25)",
 };
 
 // Fonts that are NOT variable — only support specific weights
