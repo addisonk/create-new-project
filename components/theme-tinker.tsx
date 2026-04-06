@@ -157,6 +157,7 @@ function useThemeTinker(colorTokens: ColorTokens) {
         onChange: (v: string) => {
           if (v === "Inherit") {
             document.documentElement.style.removeProperty("--font-heading");
+            document.documentElement.style.removeProperty("--font-serif");
             return;
           }
           const allFonts = { ...SERIF_FONTS, ...SANS_FONTS };
@@ -164,7 +165,10 @@ function useThemeTinker(colorTokens: ColorTokens) {
           if (slug) {
             loadGoogleFont(v, slug);
             const fallback = v in SERIF_FONTS ? "serif" : "sans-serif";
-            document.documentElement.style.setProperty("--font-heading", `"${v}", ${fallback}`);
+            const fontValue = `"${v}", ${fallback}`;
+            // Set both variables — some themes use --font-heading, others --font-serif
+            document.documentElement.style.setProperty("--font-heading", fontValue);
+            document.documentElement.style.setProperty("--font-serif", fontValue);
           }
         },
       },
@@ -182,16 +186,18 @@ function useThemeTinker(colorTokens: ColorTokens) {
     }, { collapsed: true }),
     "Shadow": folder({
       "Box Shadow": {
-        value: Object.keys(SHADOW_PRESETS)[0],
+        value: "Tailwind SM",
         options: Object.keys(SHADOW_PRESETS),
         onChange: (v: string) => {
           const shadow = SHADOW_PRESETS[v];
           if (shadow) {
-            document.documentElement.style.setProperty("--shadow", shadow);
-            // Also set common shadow scales
-            document.querySelectorAll("[class*=shadow]").forEach((el) => {
-              (el as HTMLElement).style.boxShadow = shadow === "none" ? "" : shadow;
-            });
+            // Set all shadow scale variables
+            const val = shadow === "none" ? "0 0 #0000" : shadow;
+            document.documentElement.style.setProperty("--shadow-sm", val);
+            document.documentElement.style.setProperty("--shadow", val);
+            document.documentElement.style.setProperty("--shadow-md", val);
+            document.documentElement.style.setProperty("--shadow-lg", val);
+            document.documentElement.style.setProperty("--shadow-xl", val);
           }
         },
       },
