@@ -9,8 +9,10 @@ import Color from "colorjs.io";
 import type { DesignSystemConfig } from "@/lib/config";
 // Icons are handled via static imports in the IconPlaceholder stubs
 // The /create-new-project skill swaps the import to match the project's iconLibrary
-import { ThemeTinker, useThemeTinker, ThemeEditorProvider, useThemeEditor } from "@/components/theme-tinker";
+import { ThemeTinker, useThemeTinker, ThemeEditorProvider, useThemeEditor, SANS_FONTS, SERIF_FONTS, MONO_FONTS } from "@/components/theme-tinker";
+import { Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover";
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@workspace/ui/components/command";
 import Sketch from "@uiw/react-color-sketch";
 import Preview02 from "@/components/blocks/preview-02/index";
 
@@ -314,6 +316,20 @@ function SaveBar() {
   );
 }
 
+// ─── Font helpers ───
+
+const FONT_OPTIONS: Record<string, string[]> = {
+  "Body": Object.keys({ ...SANS_FONTS, ...SERIF_FONTS }),
+  "Heading": Object.keys({ ...SERIF_FONTS, ...SANS_FONTS }),
+  "Mono": Object.keys(MONO_FONTS),
+};
+
+const LEVA_FONT_KEY: Record<string, string> = {
+  "Body": "Body Font",
+  "Heading": "Heading Font",
+  "Mono": "Mono Font",
+};
+
 // ─── Helpers ───
 
 const PRESET_KEYS = [
@@ -393,7 +409,7 @@ function PaletteBlock({
       <PopoverTrigger asChild>
         <div
           ref={ref}
-          className={`relative ${bg} ${span ?? ""} cursor-pointer transition-opacity hover:opacity-90`}
+          className={`relative ${bg} ${span ?? ""} cursor-pointer ring-2 ring-transparent hover:ring-[#3E8AE2] hover:z-10 transition-[box-shadow]`}
           style={{ minHeight: height }}
         >
           {label}
@@ -493,7 +509,7 @@ function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
       <PopoverTrigger asChild>
         <div
           ref={ref}
-          className={`relative ${bg} cursor-pointer transition-opacity hover:opacity-90`}
+          className={`relative ${bg} cursor-pointer ring-2 ring-transparent hover:ring-[#3E8AE2] hover:z-10 transition-[box-shadow]`}
           style={{ minHeight: 100 }}
         >
           {label}
@@ -538,7 +554,9 @@ function RadiusBlock({ cls, label, cssVar, value }: { cls: string; label: string
 }
 
 function DynamicHeadingSection() {
+  const ctx = useThemeEditor();
   const [headingFont, setHeadingFont] = React.useState<string | null>(null);
+  const options = FONT_OPTIONS["Heading"] ?? [];
 
   React.useEffect(() => {
     const check = () => {
@@ -556,25 +574,96 @@ function DynamicHeadingSection() {
     return () => observer.disconnect();
   }, []);
 
-  if (!headingFont) return null;
+  const [open, setOpen] = React.useState(false);
+
+  const handleFontChange = (fontName: string) => {
+    if (!ctx) return;
+    if (!ctx.tinkerOpen) ctx.setTinkerOpen(true);
+    ctx.editor.set({ "Heading Font": fontName });
+    setOpen(false);
+  };
+
+  if (!headingFont) {
+    return (
+      <>
+        <Button variant="secondary" size="lg" className="mb-8" onClick={() => setOpen(true)}>
+          <Plus className="mr-2 size-4" />
+          Add heading font
+        </Button>
+        <CommandDialog open={open} onOpenChange={setOpen} title="Add heading font" description="Search and select a heading font">
+          <Command>
+            <CommandInput placeholder="Search fonts..." />
+            <CommandList>
+              <CommandEmpty>No fonts found.</CommandEmpty>
+              <CommandGroup heading="Heading Fonts">
+                {options.map((font) => (
+                  <CommandItem key={font} value={font} onSelect={() => handleFontChange(font)}>
+                    {font}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </CommandDialog>
+      </>
+    );
+  }
+
+  const fontFamily = `"${headingFont}", serif`;
 
   return (
     <>
       <Separator className="mb-24" />
       <div className="mb-24 last:mb-0">
         <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">Heading</p>
-        <div className="text-6xl font-bold md:text-8xl mb-8" style={{ fontFamily: `"${headingFont}", serif` }}>{headingFont}</div>
+        <div
+          className="text-6xl font-bold md:text-8xl mb-8 cursor-pointer decoration-[#3E8AE2] decoration-2 underline-offset-4 hover:underline"
+          style={{ fontFamily }}
+          onClick={() => setOpen(true)}
+        >
+          {headingFont}
+        </div>
+        <CommandDialog open={open} onOpenChange={setOpen} title="Change heading font" description="Search and select a heading font">
+          <Command>
+            <CommandInput placeholder="Search fonts..." />
+            <CommandList>
+              <CommandEmpty>No fonts found.</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="Remove heading font"
+                  className="text-destructive"
+                  onSelect={() => handleFontChange("Inherit")}
+                >
+                  Remove heading font
+                </CommandItem>
+              </CommandGroup>
+              <CommandSeparator />
+              <CommandGroup heading="Fonts">
+                {options.map((font) => (
+                  <CommandItem
+                    key={font}
+                    value={font}
+                    data-checked={font === headingFont || undefined}
+                    onSelect={() => handleFontChange(font)}
+                  >
+                    {font}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </CommandDialog>
         <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
-          <div className="text-[180px] leading-[0.8]" style={{ fontFamily: `"${headingFont}", serif` }}>Aa</div>
+          <div className="text-[180px] leading-[0.8]" style={{ fontFamily }}>Aa</div>
           <div>
             <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Preview</p>
-            <p className="text-xl leading-relaxed" style={{ fontFamily: `"${headingFont}", serif` }}>
+            <p className="text-xl leading-relaxed" style={{ fontFamily }}>
               Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz
             </p>
           </div>
           <div>
             <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Numbers</p>
-            <p className="text-xl font-medium" style={{ fontFamily: `"${headingFont}", serif` }}>
+            <p className="text-xl font-medium" style={{ fontFamily }}>
               0 1 2 3 4 5 6 7 8 9
             </p>
           </div>
@@ -589,6 +678,7 @@ function FontSection({
 }: {
   fontClass: string; variable: string; name: string; label: string; weights: string[];
 }) {
+  const ctx = useThemeEditor();
   const ref = React.useRef<HTMLDivElement>(null);
   const [displayName, setDisplayName] = React.useState(defaultName);
 
@@ -597,6 +687,9 @@ function FontSection({
     ? { fontFamily: `var(${variable})` } as React.CSSProperties
     : undefined;
   const cls = fontStyle ? "" : fontClass;
+
+  const levaKey = LEVA_FONT_KEY[label];
+  const options = FONT_OPTIONS[label] ?? [];
 
   React.useEffect(() => {
     const update = () => {
@@ -615,10 +708,46 @@ function FontSection({
     return () => observer.disconnect();
   }, []);
 
+  const [open, setOpen] = React.useState(false);
+
+  const handleFontChange = (fontName: string) => {
+    if (!ctx) return;
+    if (!ctx.tinkerOpen) ctx.setTinkerOpen(true);
+    ctx.editor.set({ [levaKey]: fontName });
+    setOpen(false);
+  };
+
   return (
     <div className="mb-24 last:mb-0">
       <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
-      <div ref={ref} style={fontStyle} className={`${cls} text-6xl font-bold md:text-8xl mb-8`}>{displayName}</div>
+      <div
+        ref={ref}
+        style={fontStyle}
+        className={`${cls} text-6xl font-bold md:text-8xl mb-8 cursor-pointer decoration-[#3E8AE2] decoration-2 underline-offset-4 hover:underline`}
+        onClick={() => setOpen(true)}
+      >
+        {displayName}
+      </div>
+      <CommandDialog open={open} onOpenChange={setOpen} title={`Change ${label} font`} description={`Search and select a ${label.toLowerCase()} font`}>
+        <Command>
+          <CommandInput placeholder="Search fonts..." />
+          <CommandList>
+            <CommandEmpty>No fonts found.</CommandEmpty>
+            <CommandGroup heading={`${label} Fonts`}>
+              {options.map((font) => (
+                <CommandItem
+                  key={font}
+                  value={font}
+                  data-checked={font === displayName || undefined}
+                  onSelect={() => handleFontChange(font)}
+                >
+                  {font}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </CommandDialog>
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
         <div style={fontStyle} className={`${cls} text-[180px] leading-[0.8]`}>Aa</div>
         <div>

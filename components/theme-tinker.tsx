@@ -75,7 +75,7 @@ function buildColorSchema(
 }
 
 // ─── Font options from shadcn ───
-const SANS_FONTS: Record<string, string> = {
+export const SANS_FONTS: Record<string, string> = {
   "Geist": "Geist",
   "Inter": "Inter",
   "DM Sans": "DM+Sans",
@@ -95,7 +95,7 @@ const SANS_FONTS: Record<string, string> = {
   "Oxanium": "Oxanium",
 };
 
-const SERIF_FONTS: Record<string, string> = {
+export const SERIF_FONTS: Record<string, string> = {
   "Noto Serif": "Noto+Serif",
   "Roboto Slab": "Roboto+Slab",
   "Merriweather": "Merriweather",
@@ -104,7 +104,7 @@ const SERIF_FONTS: Record<string, string> = {
   "Instrument Serif": "Instrument+Serif",
 };
 
-const MONO_FONTS: Record<string, string> = {
+export const MONO_FONTS: Record<string, string> = {
   "Geist Mono": "Geist+Mono",
   "JetBrains Mono": "JetBrains+Mono",
 };
