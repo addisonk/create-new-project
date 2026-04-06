@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useCallback } from "react";
-import { useControls, folder, Leva } from "leva";
+import { useControls, folder, button, Leva } from "leva";
 import Color from "colorjs.io";
 import type { ColorTokens } from "@/lib/config";
 
@@ -381,40 +381,25 @@ export function ThemeTinker({
   colorTokens: ColorTokens;
 }) {
   const { values, userEdited } = useThemeTinker(colorTokens);
-  const [saving, setSaving] = React.useState(false);
-  const [saved, setSaved] = React.useState(false);
+  const savingRef = React.useRef(false);
 
-  const handleSave = async () => {
-    if (userEdited.current.size === 0) return;
-    setSaving(true);
-    try {
-      const result = await saveTheme(values, userEdited.current, colorTokens);
-      if (result.success) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-      } else {
-        console.error("Save failed:", result.error);
+  useControls({
+    "💾 Save to globals.css": button(async () => {
+      if (savingRef.current || userEdited.current.size === 0) return;
+      savingRef.current = true;
+      try {
+        const result = await saveTheme(values, userEdited.current, colorTokens);
+        if (result.success) {
+          alert("✓ Theme saved to globals.css!");
+        } else {
+          alert("Save failed: " + result.error);
+        }
+      } catch (err) {
+        alert("Save failed: " + err);
       }
-    } catch (err) {
-      console.error("Save failed:", err);
-    }
-    setSaving(false);
-  };
+      savingRef.current = false;
+    }),
+  });
 
-  return (
-    <>
-      <Leva hidden={!enabled} collapsed={false} />
-      {enabled && (
-        <div className="fixed bottom-6 left-6 z-50">
-          <button
-            onClick={handleSave}
-            disabled={saving || userEdited.current.size === 0}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : saved ? "✓ Saved to globals.css!" : "Save Theme"}
-          </button>
-        </div>
-      )}
-    </>
-  );
+  return <Leva hidden={!enabled} collapsed={false} />;
 }
