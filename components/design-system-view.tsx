@@ -129,6 +129,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
             {(i > 0 || !config.fonts.some(f => f.label === "Heading")) && <Separator className="mb-24" />}
             <FontSection
               fontClass={font.fontClass}
+              variable={font.variable}
               name={font.name}
               label={font.label}
               weights={font.weights}
@@ -223,7 +224,7 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
         </h2>
 
         <div>
-          <div className="relative rounded-2xl ring ring-foreground/10 dark:ring-foreground/10">
+          <div className="relative overflow-hidden rounded-2xl ring ring-foreground/10 dark:ring-foreground/10">
             <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl shadow-[inset_0px_0px_17px_10px_var(--muted)] dark:shadow-[inset_0px_0px_17px_10px_var(--background)]" />
             <div className="relative rounded-2xl bg-muted dark:bg-muted/30">
               <div className="h-[80vh] overflow-scroll p-10 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -411,12 +412,18 @@ function DynamicHeadingSection() {
 }
 
 function FontSection({
-  fontClass, name: defaultName, label, weights,
+  fontClass, variable, name: defaultName, label, weights,
 }: {
-  fontClass: string; name: string; label: string; weights: string[];
+  fontClass: string; variable: string; name: string; label: string; weights: string[];
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [displayName, setDisplayName] = React.useState(defaultName);
+
+  // Use inline style for fonts that don't have a matching Tailwind utility (e.g. --font-heading)
+  const fontStyle = variable === "--font-heading"
+    ? { fontFamily: `var(${variable})` } as React.CSSProperties
+    : undefined;
+  const cls = fontStyle ? "" : fontClass;
 
   React.useEffect(() => {
     const update = () => {
@@ -424,7 +431,7 @@ function FontSection({
       const computed = window.getComputedStyle(ref.current).fontFamily;
       // Extract the first font name, strip quotes
       const first = computed.split(",")[0].trim().replace(/['"]/g, "");
-      if (first && first !== "serif" && first !== "sans-serif" && first !== "monospace") {
+      if (first && first !== "serif" && first !== "sans-serif" && first !== "monospace" && first !== "ui-serif") {
         setDisplayName(first);
       }
     };
@@ -438,12 +445,12 @@ function FontSection({
   return (
     <div className="mb-24 last:mb-0">
       <p className="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">{label}</p>
-      <div ref={ref} className={`${fontClass} text-6xl font-bold md:text-8xl mb-8`}>{displayName}</div>
+      <div ref={ref} style={fontStyle} className={`${cls} text-6xl font-bold md:text-8xl mb-8`}>{displayName}</div>
       <div className="grid grid-cols-1 gap-10 md:grid-cols-[280px_1fr_1fr]">
-        <div className={`${fontClass} text-[180px] leading-[0.8]`}>Aa</div>
+        <div style={fontStyle} className={`${cls} text-[180px] leading-[0.8]`}>Aa</div>
         <div>
           <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Weights</p>
-          <div className={`${fontClass} space-y-2`}>
+          <div style={fontStyle} className={`${cls} space-y-2`}>
             {weights.map((w) => {
               const wc = w === "Light" ? "font-light" : w === "Regular" ? "font-normal" : w === "Medium" ? "font-medium" : w === "Semibold" ? "font-semibold" : "font-bold";
               return <p key={w} className={`text-lg ${wc}`}>{w}</p>;
@@ -452,7 +459,7 @@ function FontSection({
         </div>
         <div>
           <p className="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">Overview</p>
-          <div className={`${fontClass} space-y-4`}>
+          <div style={fontStyle} className={`${cls} space-y-4`}>
             <p className="text-xl leading-relaxed">Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz</p>
             <p className="text-xl font-medium">0 1 2 3 4 5 6 7 8 9</p>
             <p className="text-lg text-muted-foreground">! @ # $ % ^ &amp; * ( ) - + {"{"}{"}"} ?</p>
