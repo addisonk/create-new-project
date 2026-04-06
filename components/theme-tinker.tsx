@@ -30,10 +30,15 @@ const COLOR_KEYS = [
   "secondary", "secondary-foreground",
   "accent", "accent-foreground",
   "muted", "muted-foreground",
-  "destructive",
+  "destructive", "destructive-foreground",
   "border", "input", "ring",
   "card", "card-foreground",
-  "chart-1", "chart-2", "chart-3",
+  "popover", "popover-foreground",
+  "chart-1", "chart-2", "chart-3", "chart-4", "chart-5",
+  "sidebar", "sidebar-foreground",
+  "sidebar-primary", "sidebar-primary-foreground",
+  "sidebar-accent", "sidebar-accent-foreground",
+  "sidebar-border", "sidebar-ring",
 ];
 
 function buildColorSchema(
