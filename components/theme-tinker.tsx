@@ -113,13 +113,20 @@ const SHADOW_PRESETS: Record<string, string> = {
   "Subtle Edge": "1px 1px 3px 0px rgba(0, 0, 0, 0.08)",
 };
 
+// Fonts that are NOT variable — only support specific weights
+const STATIC_FONTS = new Set(["Instrument+Serif", "Merriweather"]);
+
 function loadGoogleFont(fontName: string, slug: string) {
   const id = `gf-${slug}`;
   if (document.getElementById(id)) return;
   const link = document.createElement("link");
   link.id = id;
   link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?family=${slug}:wght@100..900&display=swap`;
+  if (STATIC_FONTS.has(slug)) {
+    link.href = `https://fonts.googleapis.com/css2?family=${slug}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  } else {
+    link.href = `https://fonts.googleapis.com/css2?family=${slug}:wght@100..900&display=swap`;
+  }
   document.head.appendChild(link);
 }
 
