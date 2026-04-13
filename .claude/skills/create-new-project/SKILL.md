@@ -61,11 +61,11 @@ Use when the user wants to start a new project, create a new app, or scaffold a 
 
 6. Add the design system viewer app:
 
-   Clone the design-system-template into `apps/design-system/`:
+   Clone the create-new-project template into `apps/design-system/`:
 
    ```bash
    cd {parent-directory}/{project-name}
-   gh repo clone addisonk/design-system-template apps/design-system -- --depth 1
+   gh repo clone addisonk/create-new-project apps/design-system -- --depth 1
    rm -rf apps/design-system/.git
    ```
 

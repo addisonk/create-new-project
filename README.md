@@ -9,7 +9,7 @@ Lives at `apps/design-system/` in a shadcn monorepo alongside `apps/web/` and `p
 This template is automatically added by the `/create-new-project` skill. To add it manually:
 
 ```bash
-gh repo clone addisonk/design-system-template apps/design-system -- --depth 1
+gh repo clone addisonk/create-new-project apps/design-system -- --depth 1
 rm -rf apps/design-system/.git
 ```
 
