@@ -125,8 +125,8 @@ Write `$STYLE` into `apps/design-system/components.json` (the `style` field).
 The mobile app lives at `{parent}/{name}/apps/mobile/`. If the reusables CLI creates it in a different location, move it to `apps/mobile/` afterward.
 
 Required results after this step:
-- `apps/mobile/package.json` with Expo SDK 55, Expo Router, `nativewind@5.0.0-preview.2`, `tailwindcss@^4`, `react-native-css@0.0.0-nightly.5ce6396`, `@tailwindcss/postcss`, `tailwind-merge`, `clsx`
-- `apps/mobile/resolutions` (via root `package.json` or `apps/mobile/package.json`) with `lightningcss: "1.30.1"`
+- `apps/mobile/package.json` with Expo SDK 55, Expo Router, `nativewind@5.0.0-preview.3`, `tailwindcss@^4`, `react-native-css@^3.0.7`, `@tailwindcss/postcss`, `tailwind-merge`, `clsx`, and **explicit `connect` dependency** (workaround: react-native-css-interop needs `connect` at runtime but doesn't declare it; under pnpm strict hoisting, metro.config.js fails to load without this)
+- `lightningcss` pinned to `1.30.1` via root `pnpm.overrides`
 - `apps/mobile/postcss.config.mjs` → `{ plugins: { "@tailwindcss/postcss": {} } }`
 - `apps/mobile/global.css` with Tailwind v4 imports + platform-specific font variables (per `expo-tailwind-setup`)
 - `apps/mobile/tw/index.tsx` — CSS-enabled wrappers (`View`, `Text`, `Pressable`, `ScrollView`, `Link`) using `useCssElement` from react-native-css (per `expo-tailwind-setup`)
@@ -134,11 +134,25 @@ Required results after this step:
 - `apps/mobile/components/ui/` — reusables components (per `react-native-reusables` skill)
 - `apps/mobile/app/` — Expo Router routes, kebab-case file names, route matching `/` (per `building-native-ui`)
 
+After scaffolding (and after stripping any `babel.config.js` / `tailwind.config.js` the reusables CLI may have produced), align all Expo packages with SDK 55 expectations:
+
+```bash
+cd {parent}/{name}/apps/mobile
+npx expo install --fix
+```
+
 Then install `@expo/ui` for native primitives:
 
 ```bash
 cd {parent}/{name}/apps/mobile
 npx expo install @expo/ui
+```
+
+If the project ends up with `react-native-svg`, also add `buffer` as an explicit dependency (svg requires it but doesn't declare it under pnpm strict hoisting):
+
+```bash
+cd {parent}/{name}/apps/mobile
+pnpm add buffer
 ```
 
 **Follow the `expo-ui-swiftui` and `expo-ui-jetpack-compose` skills** for the `Host` / `RNHostView` usage pattern. Note: `@expo/ui` requires a custom dev client — the app will no longer run in Expo Go. First run: `npx expo run:ios` (iOS) or `npx expo run:android` (Android).
@@ -163,15 +177,14 @@ config.resolver.nodeModulesPaths = [
 ];
 
 module.exports = withNativeWind(config, {
-  input: './global.css',
-  inlineVariables: false,          // keeps PlatformColor working
+  inlineVariables: false,          // keeps PlatformColor working in CSS variables
   globalClassNamePolyfill: false,  // tw/ wrappers handle className explicitly
 });
 ```
 
 ### A6. Patch root `package.json` with Expo-in-pnpm workarounds
 
-Merge into `{parent}/{name}/package.json`:
+Merge into `{parent}/{name}/package.json`. These overrides + packageExtensions are the proven nba-on-tv recipe — without them, Expo + pnpm strict hoisting breaks in subtle ways (missing `connect`, missing `metro-runtime`, React version mismatches, etc.).
 
 ```json
 {
@@ -182,8 +195,11 @@ Merge into `{parent}/{name}/package.json`:
   },
   "pnpm": {
     "overrides": {
-      "@expo/log-box": "55.0.3"
+      "react": "19.2.3",
+      "react-dom": "19.2.3",
+      "lightningcss": "1.30.1"
     },
+    "onlyBuiltDependencies": ["unrs-resolver"],
     "packageExtensions": {
       "react-native-css-interop": {
         "dependencies": { "connect": "^3.7.0" }
@@ -196,7 +212,57 @@ Merge into `{parent}/{name}/package.json`:
 }
 ```
 
-These are required for Expo to resolve correctly inside a pnpm workspace.
+Also create `{parent}/{name}/.npmrc` (single line — fixes another huge class of pnpm-strict-hoisting issues with Expo):
+
+```
+shamefully-hoist=true
+```
+
+And create `{parent}/{name}/tsconfig.base.json` for shared compiler options (extended by `apps/mobile/tsconfig.json` and the web app):
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true
+  },
+  "exclude": ["node_modules"]
+}
+```
+
+Update `apps/mobile/tsconfig.json` to extend both Expo's base and the root base, with the `@/` path alias:
+
+```json
+{
+  "extends": ["expo/tsconfig.base", "../../tsconfig.base.json"],
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}
+```
 
 ### A7. Create `packages/shared` placeholder
 
@@ -302,7 +368,9 @@ Steps:
 
 ## Known sharp edges to watch for during testing
 
-- **react-native-reusables CLI Tailwind version:** the CLI may still default to v3 + babel. If so, strip it and apply the `expo-tailwind-setup` v4 CSS-first recipe after init.
-- **Expo in pnpm monorepo:** the root `pnpm.overrides` + `packageExtensions` above are required; without them, resolution fails.
+- **react-native-reusables CLI Tailwind version:** the CLI may still default to Tailwind v3 + `babel.config.js`. If so, strip both and apply the `expo-tailwind-setup` v4 CSS-first recipe (delete `babel.config.js` and `tailwind.config.js`, add `postcss.config.mjs`, update metro options, update `global.css` to v4 imports).
+- **Expo in pnpm monorepo:** the root `pnpm.overrides` + `packageExtensions` + `.npmrc shamefully-hoist=true` are all required. Without all three, resolution fails in different ways.
+- **NativeWind v5 oklch text bug (severity: critical, may already be fixed):** on `nativewind@5.0.0-preview.2` + `react-native-css@nightly`, Tailwind v4's `oklch()` colors broke `<Text>` rendering — text became invisible because RN can't parse oklch. `useCssElement` also overwrote inline `style` props, blocking the workaround. **Fix attempt:** we now pin `nativewind@5.0.0-preview.3` + `react-native-css@^3.0.7`. If text still renders invisible after the first run, the workaround is to import `Text` directly from `react-native` (not from `@/tw`) and use inline style for colors. Watch for this on the first iOS simulator launch.
 - **`@expo/ui` + Expo Go:** incompatible. First run of the mobile app must be `npx expo run:ios` or `expo run:android`, not `expo start`.
 - **Font sync (web + design-system):** the one manual step in the web flow — easy to forget. Always verify the design-system app compiles after this step.
+- **`react-native-svg` + `buffer`:** if the dependency tree pulls in `react-native-svg`, also add an explicit `buffer` dep. Same pnpm strict-hoisting cause as the `connect` workaround.
