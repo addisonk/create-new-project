@@ -120,42 +120,80 @@ Write `$STYLE` into `apps/design-system/components.json` (the `style` field).
 
 ### A4. Scaffold the mobile app
 
-**Follow the `react-native-reusables` skill as the source of truth for reusables initialization.** Follow the `expo-tailwind-setup` skill for the NativeWind v5 + Tailwind v4 CSS-first recipe — prefer it over any Tailwind v3 + babel.config.js setup the reusables CLI might produce (strip and replace if needed).
+**Important — do NOT use `npx @react-native-reusables/cli@latest init`.** It requires interactive TTY input and hangs when piped, breaking automated runs. Instead, use the `create-expo-app` + manual layering pattern below. After the mobile app is up, you can layer reusables components on top with `npx @react-native-reusables/cli@latest add` (which runs interactively but doesn't hang).
 
-The mobile app lives at `{parent}/{name}/apps/mobile/`. If the reusables CLI creates it in a different location, move it to `apps/mobile/` afterward.
+The mobile app lives at `{parent}/{name}/apps/mobile/`.
 
-Required results after this step:
-- `apps/mobile/package.json` with Expo SDK 55, Expo Router, `nativewind@5.0.0-preview.3`, `tailwindcss@^4`, `react-native-css@^3.0.7`, `@tailwindcss/postcss`, `tailwind-merge`, `clsx`, and **explicit `connect` dependency** (workaround: react-native-css-interop needs `connect` at runtime but doesn't declare it; under pnpm strict hoisting, metro.config.js fails to load without this)
-- `lightningcss` pinned to `1.30.1` via root `pnpm.overrides`
-- `apps/mobile/postcss.config.mjs` → `{ plugins: { "@tailwindcss/postcss": {} } }`
-- `apps/mobile/global.css` with Tailwind v4 imports + platform-specific font variables (per `expo-tailwind-setup`)
-- `apps/mobile/tw/index.tsx` — CSS-enabled wrappers (`View`, `Text`, `Pressable`, `ScrollView`, `Link`) using `useCssElement` from react-native-css (per `expo-tailwind-setup`)
-- No `apps/mobile/babel.config.js` (CSS-first means no babel preset needed)
-- `apps/mobile/components/ui/` — reusables components (per `react-native-reusables` skill)
-- `apps/mobile/app/` — Expo Router routes, kebab-case file names, route matching `/` (per `building-native-ui`)
+**Step A4a — scaffold the Expo app:**
 
-After scaffolding (and after stripping any `babel.config.js` / `tailwind.config.js` the reusables CLI may have produced), align all Expo packages with SDK 55 expectations:
+```bash
+cd {parent}/{name}/apps
+npx create-expo-app@latest mobile --template default
+```
+
+This creates `apps/mobile/` with Expo Router, the default tabs template, and TypeScript.
+
+**Step A4b — pin SDK 55 and align packages:**
 
 ```bash
 cd {parent}/{name}/apps/mobile
+npx expo install expo@~55.0.0
 npx expo install --fix
 ```
 
-Then install `@expo/ui` for native primitives:
+`create-expo-app`'s default template may lag behind the latest stable Expo SDK — these two commands ensure SDK 55 is installed and all peer packages (react-native, react-native-reanimated, etc.) align with what SDK 55 expects.
+
+**Step A4c — install NativeWind v5 + Tailwind v4 + dependencies:**
+
+Follow the **`expo-tailwind-setup` skill** for the canonical recipe. Specifically:
+
+```bash
+cd {parent}/{name}/apps/mobile
+npx expo install tailwindcss@^4 nativewind@5.0.0-preview.3 \
+  react-native-css@^3.0.7 @tailwindcss/postcss tailwind-merge clsx
+pnpm add connect           # explicit dep — react-native-css-interop needs it at runtime
+```
+
+Then:
+- Delete any `babel.config.js` and `tailwind.config.js` that `create-expo-app` may have created (NativeWind v5 is CSS-first, no babel preset required)
+- Create `apps/mobile/postcss.config.mjs` → `{ plugins: { "@tailwindcss/postcss": {} } }`
+- Create `apps/mobile/global.css` with Tailwind v4 imports + platform-specific font variables (per `expo-tailwind-setup`)
+- Create `apps/mobile/tw/index.tsx` with CSS-enabled wrappers (`View`, `Text`, `Pressable`, `ScrollView`, `Link`) using `useCssElement` from react-native-css (per `expo-tailwind-setup`)
+- Import `./global.css` from `apps/mobile/app/_layout.tsx`
+
+**Step A4d — add reusables foundation files:**
+
+Follow the **`react-native-reusables` skill** for these:
+- `apps/mobile/lib/utils.ts` — exporting `cn()` (clsx + tailwind-merge)
+- `apps/mobile/components.json` — reusables CLI config (so `@react-native-reusables/cli add` works later)
+- `apps/mobile/components/ui/text.tsx` — Text component with `TextClassContext`
+- `apps/mobile/components/ui/button.tsx` — Button component with CVA variants and `Platform.select` for hover/active
+- `<PortalHost />` in `apps/mobile/app/_layout.tsx` (for dialogs/menus/popovers from reusables)
+
+**Step A4e — install `@expo/ui` for native primitives:**
 
 ```bash
 cd {parent}/{name}/apps/mobile
 npx expo install @expo/ui
 ```
 
-If the project ends up with `react-native-svg`, also add `buffer` as an explicit dependency (svg requires it but doesn't declare it under pnpm strict hoisting):
+Follow the `expo-ui-swiftui` and `expo-ui-jetpack-compose` skills for the `Host` / `RNHostView` usage pattern. Note: `@expo/ui` requires a custom dev client — the app cannot run in Expo Go. First run must be `npx expo run:ios` or `npx expo run:android`.
+
+**Step A4f — handle `react-native-svg` if present:**
+
+If the dependency tree pulls in `react-native-svg` (from reusables, lucide-react-native, or any other source), add `buffer` as an explicit dep. Same pnpm strict-hoisting cause as the `connect` workaround.
 
 ```bash
 cd {parent}/{name}/apps/mobile
 pnpm add buffer
 ```
 
-**Follow the `expo-ui-swiftui` and `expo-ui-jetpack-compose` skills** for the `Host` / `RNHostView` usage pattern. Note: `@expo/ui` requires a custom dev client — the app will no longer run in Expo Go. First run: `npx expo run:ios` (iOS) or `npx expo run:android` (Android).
+**To add more reusables components later** (run interactively from the user's terminal, not piped):
+
+```bash
+cd {parent}/{name}/apps/mobile
+npx @react-native-reusables/cli@latest add
+```
 
 ### A5. Patch `apps/mobile/metro.config.js` for the monorepo
 
@@ -368,7 +406,7 @@ Steps:
 
 ## Known sharp edges to watch for during testing
 
-- **react-native-reusables CLI Tailwind version:** the CLI may still default to Tailwind v3 + `babel.config.js`. If so, strip both and apply the `expo-tailwind-setup` v4 CSS-first recipe (delete `babel.config.js` and `tailwind.config.js`, add `postcss.config.mjs`, update metro options, update `global.css` to v4 imports).
+- **react-native-reusables CLI `init` hangs when piped:** Don't use `@react-native-reusables/cli init` in the scaffold flow — it requires interactive TTY input and hangs in automated runs. The A4 steps use `create-expo-app` + manual NativeWind v5 layering instead, which is deterministic. Use `@react-native-reusables/cli add` (also interactive, but doesn't hang) for adding more reusables components after the initial scaffold.
 - **Expo in pnpm monorepo:** the root `pnpm.overrides` + `packageExtensions` + `.npmrc shamefully-hoist=true` are all required. Without all three, resolution fails in different ways.
 - **NativeWind v5 oklch text bug (severity: critical, may already be fixed):** on `nativewind@5.0.0-preview.2` + `react-native-css@nightly`, Tailwind v4's `oklch()` colors broke `<Text>` rendering — text became invisible because RN can't parse oklch. `useCssElement` also overwrote inline `style` props, blocking the workaround. **Fix attempt:** we now pin `nativewind@5.0.0-preview.3` + `react-native-css@^3.0.7`. If text still renders invisible after the first run, the workaround is to import `Text` directly from `react-native` (not from `@/tw`) and use inline style for colors. Watch for this on the first iOS simulator launch.
 - **`@expo/ui` + Expo Go:** incompatible. First run of the mobile app must be `npx expo run:ios` or `expo run:android`, not `expo start`.
