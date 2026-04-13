@@ -22,7 +22,24 @@ Claude will ask (via interactive prompts):
 
 It then scaffolds everything into `~/Projects/{name}/` and reports next steps.
 
-## Prerequisites
+## System requirements
+
+The skill runs a preflight check before scaffolding and will stop if anything's missing. Required:
+
+**Universal:**
+- **Node 20+** — `node -v`
+- **pnpm 10** — `corepack enable && corepack prepare pnpm@10 --activate`
+- **gh CLI** — `brew install gh` (used to clone the design-system viewer)
+- **git** — usually present; `xcode-select --install` if not
+
+**Mobile (Both or Mobile-only paths):**
+- **Xcode** — install from the Mac App Store, then run `sudo xcode-select --install`
+- **At least one iOS Simulator runtime** — open Xcode → Settings → Components, install iOS (latest). About 3 GB.
+- **Verify a device exists:** `xcrun simctl list devices available` should list at least one iPhone/iPad
+
+If you skip the simulator step, the scaffold still finishes, but `npx expo run:ios` will fail at the very last step with `xcodebuild: error: Unable to find a destination`.
+
+## Prerequisite skills
 
 The mobile path treats these Claude skills as source of truth. Install them before running the scaffold on a mobile or "both" path, or the mobile quality drops:
 

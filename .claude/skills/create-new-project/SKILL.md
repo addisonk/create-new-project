@@ -25,6 +25,33 @@ If any of these skills are not installed, tell the user which ones are missing a
 
 ## Steps
 
+### Step 0 — Preflight check
+
+**Run this BEFORE asking any questions.** Catches missing system dependencies in 5 seconds instead of letting the user discover them 10 minutes later when `xcodebuild` fails.
+
+Run these checks and collect failures into a single report:
+
+**Universal (all paths):**
+- `command -v pnpm` — if missing: "Install pnpm: `corepack enable && corepack prepare pnpm@10 --activate`"
+- `pnpm --version` — should be 10.x; if older: same fix as above
+- `command -v gh` — if missing: "Install gh CLI: `brew install gh`" (needed to clone the design-system viewer)
+- `node -v` — should be 20+; if older: "Upgrade Node to 20+ via `brew install node@20` or nvm"
+- `command -v git` — if missing: "Install git: `xcode-select --install` or `brew install git`"
+
+**Mobile (Both or Mobile-only paths only):**
+- `xcode-select -p` — should print a path. If it errors or returns "no developer tools": "Install Xcode from the Mac App Store, then run `sudo xcode-select --install`"
+- `xcrun simctl list runtimes -j 2>/dev/null` — parse JSON; the `runtimes` array must contain at least one entry whose `name` contains `"iOS"`. If empty: "No iOS simulator runtime installed. Open Xcode → Settings → Components, find iOS (latest), and click Get. ~3 GB download."
+- `xcrun simctl list devices available -j 2>/dev/null` — parse JSON; at least one device must exist under any iOS runtime key. Same fix if empty.
+
+**If ANY check fails:**
+- STOP. Do not proceed to Step 1.
+- Report ALL failures in a single block (not one at a time)
+- For each failure, give the exact command to fix it
+- Tell the user to run the skill again once fixed
+- Do NOT start scaffolding with a known-broken environment
+
+**If everything passes:** silently continue to Step 1. (Don't make the user wait through a "✓ all checks passed" wall of text — just move on.)
+
 ### Step 1 — Project name
 
 Use `AskUserQuestion` (skip if provided as an argument):
