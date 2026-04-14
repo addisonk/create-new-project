@@ -34,10 +34,11 @@ The skill runs a preflight check before scaffolding and will stop if anything's 
 
 **Mobile (Both or Mobile-only paths):**
 - **Xcode** — install from the Mac App Store, then run `sudo xcode-select --install`
-- **At least one iOS Simulator runtime** — open Xcode → Settings → Components, install iOS (latest). About 3 GB.
-- **Verify a device exists:** `xcrun simctl list devices available` should list at least one iPhone/iPad
+- **iOS simulator runtime matching your Xcode version.** This is critical: if your Xcode is 26.4, you need an `iOS 26.x` simulator runtime — having only an older runtime (e.g. iOS 18.6) is *not* enough. Xcode requires a matching iOS SDK to compile, even when targeting older simulators.
+  - **Install from CLI (no Xcode UI needed):** `xcodebuild -downloadPlatform iOS` — about 8 GB, takes 15–20 min
+  - Or via Xcode → Settings → Platforms → `+` → iOS
 
-If you skip the simulator step, the scaffold still finishes, but `npx expo run:ios` will fail at the very last step with `xcodebuild: error: Unable to find a destination`.
+If you skip this, the scaffold still finishes, but `npx expo run:ios` will fail at the very last step with `xcodebuild: error: Unable to find a destination`. The skill's preflight check catches this before scaffolding starts.
 
 ## Prerequisite skills
 
