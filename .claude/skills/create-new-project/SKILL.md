@@ -188,7 +188,36 @@ Then:
 - Delete any `babel.config.js` and `tailwind.config.js` that `create-expo-app` may have created (NativeWind v5 is CSS-first, no babel preset required)
 - Create `apps/mobile/postcss.config.mjs` → `{ plugins: { "@tailwindcss/postcss": {} } }`
 - Create `apps/mobile/global.css` with Tailwind v4 imports + platform-specific font variables (per `expo-tailwind-setup`)
-- Create `apps/mobile/tw/index.tsx` with CSS-enabled wrappers (`View`, `Text`, `Pressable`, `ScrollView`, `Link`) using `useCssElement` from react-native-css (per `expo-tailwind-setup`)
+- Create `apps/mobile/tw/index.tsx` with CSS-enabled wrappers using `useCssElement` from react-native-css. **CRITICAL: the third argument to `useCssElement` is required.** It maps the className prop to a style prop on the underlying component. Without it, you get "Cannot convert undefined value to object" at render time. The signature is `useCssElement(Component, props, { className: "style" })`. ScrollView additionally needs `contentContainerClassName: "contentContainerStyle"`. Use exactly this template:
+
+  ```tsx
+  import { useCssElement } from "react-native-css";
+  import {
+    View as RNView, Text as RNText, Pressable as RNPressable, ScrollView as RNScrollView,
+    type ViewProps, type TextProps, type PressableProps, type ScrollViewProps,
+  } from "react-native";
+  import { Link as ExpoLink, type LinkProps as ExpoLinkProps } from "expo-router";
+
+  export const View = (props: ViewProps & { className?: string }) =>
+    useCssElement(RNView, props, { className: "style" });
+
+  export const Text = (props: TextProps & { className?: string }) =>
+    useCssElement(RNText, props, { className: "style" });
+
+  export const Pressable = (props: PressableProps & { className?: string }) =>
+    useCssElement(RNPressable, props, { className: "style" });
+
+  export const ScrollView = (
+    props: ScrollViewProps & { className?: string; contentContainerClassName?: string }
+  ) =>
+    useCssElement(RNScrollView, props, {
+      className: "style",
+      contentContainerClassName: "contentContainerStyle",
+    });
+
+  export const Link = (props: ExpoLinkProps & { className?: string }) =>
+    useCssElement(ExpoLink as never, props, { className: "style" });
+  ```
 - Import `./global.css` from `apps/mobile/app/_layout.tsx`
 
 **Step A4d — add reusables foundation files:**
