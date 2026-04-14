@@ -552,9 +552,14 @@ This overwrites whatever `apps/mobile/global.css` was scaffolded earlier. Going 
 
 ### A4g — Replace default Expo template with welcome screen
 
-`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built three-tab starter that demonstrates the stack: NativeTabs with SF Symbol icons, reusables `Card`/`Button`/`Badge`/`Avatar`/`Separator` used properly, semantic theme tokens, OS-driven dark mode, and lucide icons rendered inline.
+`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built three-tab starter that demonstrates **both** sides of the stack:
 
-Home is intentionally minimal — centered icon + title + subtitle + two buttons — so new projects don't start cluttered. Browse shows a feed of Cards with inline icons and Badges (the "look what you can build" page). Settings shows an iOS-style grouped-row list with Avatar header.
+1. **Home** (`index.tsx`) — pure `@expo/ui/swift-ui` native SwiftUI primitives (Host, VStack, HStack, Image, Text, Button, Spacer). SF Symbol grid, system-font title, SwiftUI `borderedProminent` + `bordered` buttons. No NativeWind, no reusables. Unmistakably native on iOS, demonstrates the escape hatch for screens that want to be fully native.
+2. **Browse + Settings** — NativeTabs + reusables (`Card`/`Button`/`Badge`/`Avatar`/`Separator`), NativeWind classes, lucide icons, semantic theme tokens, OS-driven dark mode. Demonstrates the cross-platform path that should cover 90% of screens.
+
+That split is deliberate: it shows new projects both options side-by-side so teams can pick per screen.
+
+Home content: a 2x2 grid of SF shape icons (square/circle/diamond/triangle), "A Basic Template" title, one-line muted subtitle, and a side-by-side **Start** / **Docs** button row, all vertically centered by `Spacer`s. Browse shows a feed of Cards with inline icons and Badges (the "look what you can build" page). Settings shows an iOS-style grouped-row list with Avatar header.
 
 **Replace `apps/mobile/app/(tabs)/_layout.tsx`:**
 
@@ -581,47 +586,98 @@ export default function TabLayout() {
 }
 ```
 
-**Replace `apps/mobile/app/(tabs)/index.tsx`** — deliberately minimal: centered icon, title, one-line subtitle, two buttons pinned near the bottom. Serves as a "hello" that's easy to delete, not a feature tour.
+**Replace `apps/mobile/app/(tabs)/index.tsx`** — this one's intentionally different from Browse/Settings. It uses **`@expo/ui/swift-ui` native SwiftUI primitives** (Host, VStack, HStack, Image, Text, Button, Spacer) instead of NativeWind + reusables. Why: Home is the first thing a user sees, so it should look unmistakably native on iOS — SF Symbols, system fonts, SwiftUI button styles, liquid-glass-ready. It also demonstrates the `@expo/ui` escape hatch for anyone who wants to go native-first for specific screens later. The rest of the app (Browse, Settings) stays on NativeWind + reusables so the cross-platform story holds.
+
+Two `Spacer` children sandwich the content group (icon grid + title + subtitle + button row), centering it vertically. The button row uses `HStack` with `frame({ maxWidth: Infinity })` on each button's inner Text so they split the available width 50/50.
 
 ```tsx
-import { ScrollView } from "react-native";
 import { Stack } from "expo-router";
-import { Sparkles } from "lucide-react-native";
-import { View } from "@/tw";
-import { Text } from "@/components/ui/text";
-import { Button } from "@/components/ui/button";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Host,
+  VStack,
+  HStack,
+  Image,
+  Text,
+  Button,
+  Spacer,
+} from "@expo/ui/swift-ui";
+import {
+  padding,
+  font,
+  foregroundColor,
+  buttonStyle,
+  controlSize,
+  frame,
+  multilineTextAlignment,
+} from "@expo/ui/swift-ui/modifiers";
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+
   return (
     <>
       <Stack.Screen options={{ title: "Home" }} />
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        contentInsetAdjustmentBehavior="automatic"
-      >
-        <View className="flex-1 items-center justify-between px-8 pb-10 pt-16">
-          <View className="items-center gap-4">
-            <View className="h-20 w-20 items-center justify-center rounded-full bg-secondary">
-              <Sparkles size={36} className="text-foreground" />
-            </View>
-            <Text className="text-center text-3xl font-extrabold tracking-tight text-foreground">
-              Welcome
-            </Text>
-            <Text className="text-center text-base text-muted-foreground">
-              A cross-platform starter with sensible defaults.
-            </Text>
-          </View>
-
-          <View className="w-full gap-3">
-            <Button onPress={() => {}}>
-              <Text>Get started</Text>
+      <Host style={{ flex: 1 }}>
+        <VStack
+          spacing={12}
+          modifiers={[
+            frame({ maxWidth: Infinity, maxHeight: Infinity }),
+            padding({
+              top: insets.top + 32,
+              bottom: insets.bottom + 100,
+              horizontal: 32,
+            }),
+          ]}
+        >
+          <Spacer />
+          <VStack spacing={12}>
+            <HStack spacing={12}>
+              <Image systemName="square.fill" size={40} />
+              <Image systemName="circle.fill" size={40} />
+            </HStack>
+            <HStack spacing={12}>
+              <Image systemName="diamond.fill" size={40} />
+              <Image systemName="triangle.fill" size={40} />
+            </HStack>
+          </VStack>
+          <Text
+            modifiers={[
+              font({ size: 34, weight: "bold" }),
+              padding({ top: 24 }),
+            ]}
+          >
+            A Basic Template
+          </Text>
+          <Text
+            modifiers={[
+              font({ size: 16 }),
+              foregroundColor("#8e8e93"),
+              multilineTextAlignment("center"),
+            ]}
+          >
+            A lil template for quick starting projects for a basic mobile app.
+          </Text>
+          <HStack spacing={12} modifiers={[padding({ top: 16 })]}>
+            <Button
+              onPress={() => {}}
+              modifiers={[
+                buttonStyle("borderedProminent"),
+                controlSize("large"),
+              ]}
+            >
+              <Text modifiers={[frame({ maxWidth: Infinity })]}>Start</Text>
             </Button>
-            <Button variant="ghost" onPress={() => {}}>
-              <Text>View the docs</Text>
+            <Button
+              onPress={() => {}}
+              modifiers={[buttonStyle("bordered"), controlSize("large")]}
+            >
+              <Text modifiers={[frame({ maxWidth: Infinity })]}>Docs</Text>
             </Button>
-          </View>
-        </View>
-      </ScrollView>
+          </HStack>
+          <Spacer />
+        </VStack>
+      </Host>
     </>
   );
 }
@@ -897,7 +953,8 @@ export default function SettingsScreen() {
 - SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs accepts them directly. `square.fill` / `diamond.fill` / `triangle.fill` are used deliberately as generic placeholder icons — swap to semantic ones (`house.fill`, `magnifyingglass`, `gearshape.fill`) when the product concept is defined.
 - `Stack.Toolbar` is deliberately NOT used on the Home screen. It's iOS-only (SDK 55+), adds noise to a minimal welcome screen, and the pattern is easy to add later. If you need it for another screen, `<Stack.Toolbar placement="right"><Stack.Toolbar.Button icon="plus.circle.fill" onPress={...} /></Stack.Toolbar>` inside a `<Stack.Screen>` component is the full recipe.
 - Dark mode is **OS-driven** via RN's `useColorScheme()`. No in-app toggle, no `lib/theme.tsx` ThemeContext — users flip it in Control Center. The `@media (prefers-color-scheme: dark) { :root { ... } }` block generated by `sync:tokens` (step A4f.5) handles the CSS variable flip automatically.
-- `lucide-react-native` icons are used inline on Home/Browse/Settings (Layers, Palette, Zap, Box, Type, MousePointerClick, Layout, Bell, ChevronRight). The reusables bulk-install in A4d.5 adds this as a peer dep.
+- `lucide-react-native` icons are used inline on Browse and Settings (Box, Type, Palette, Layout, MousePointerClick, Bell, ChevronRight). Home uses SF Symbols directly via `@expo/ui` `Image systemName={...}` — no lucide there. The reusables bulk-install in A4d.5 adds `lucide-react-native` as a peer dep for the Browse/Settings path.
+- Home's SwiftUI layout uses two `Spacer` children sandwiching the content group (icon grid + title + subtitle + button row). SwiftUI centers the whole stack vertically as one connected unit. The button row uses an `HStack` with `frame({ maxWidth: Infinity })` on each button's inner `<Text>` so they split the available width 50/50 — applying the frame to the `<Button>` itself doesn't work because SwiftUI's `borderedProminent` and `bordered` styles size their background to the label, not the hit area.
 - Card composition rule: use `Card > CardHeader (CardTitle + CardDescription) > CardContent` — do NOT strip Card's default `py-6 gap-6` padding to hack a full-bleed row list. For iOS-grouped-row patterns (Settings), use a plain `bg-card border border-border rounded-xl` View instead — Card is the wrong primitive for that shape.
 - If a different (or older) template is being used and there's no `app/(tabs)/` directory, follow the `building-native-ui` skill's `route-structure.md` reference for the right place to put these files.
 
