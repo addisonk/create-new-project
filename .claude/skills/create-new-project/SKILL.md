@@ -552,9 +552,9 @@ This overwrites whatever `apps/mobile/global.css` was scaffolded earlier. Going 
 
 ### A4g — Replace default Expo template with welcome screen
 
-`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built three-tab starter that demonstrates the stack end-to-end: NativeTabs with SF Symbol icons, a header toolbar button, reusables `Card`/`Button`/`Badge`/`Avatar`/`Separator` used properly, semantic theme tokens, OS-driven dark mode, and lucide icons rendered inline.
+`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built three-tab starter that demonstrates the stack: NativeTabs with SF Symbol icons, reusables `Card`/`Button`/`Badge`/`Avatar`/`Separator` used properly, semantic theme tokens, OS-driven dark mode, and lucide icons rendered inline.
 
-Every screen proves something: Home shows Card composition (Header + Content) + primary/outline button group, Browse shows a feed of Cards with inline icons and Badges, Settings shows an iOS-style grouped-row list with Avatar header.
+Home is intentionally minimal — centered icon + title + subtitle + two buttons — so new projects don't start cluttered. Browse shows a feed of Cards with inline icons and Badges (the "look what you can build" page). Settings shows an iOS-style grouped-row list with Avatar header.
 
 **Replace `apps/mobile/app/(tabs)/_layout.tsx`:**
 
@@ -581,108 +581,42 @@ export default function TabLayout() {
 }
 ```
 
-**Replace `apps/mobile/app/(tabs)/index.tsx`:**
+**Replace `apps/mobile/app/(tabs)/index.tsx`** — deliberately minimal: centered icon, title, one-line subtitle, two buttons pinned near the bottom. Serves as a "hello" that's easy to delete, not a feature tour.
 
 ```tsx
 import { ScrollView } from "react-native";
 import { Stack } from "expo-router";
-import { Palette, Layers, Zap } from "lucide-react-native";
+import { Sparkles } from "lucide-react-native";
 import { View } from "@/tw";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
-const FEATURES = [
-  {
-    icon: Layers,
-    title: "Reusable components",
-    description: "Card, Button, Badge, Dialog, and 30+ more, pre-installed.",
-  },
-  {
-    icon: Palette,
-    title: "Themed tokens",
-    description: "Light and dark mode wired to your design system.",
-  },
-  {
-    icon: Zap,
-    title: "Native-fast",
-    description: "NativeTabs, Expo Router, and Reanimated out of the box.",
-  },
-];
 
 export default function HomeScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Home" }} />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button icon="plus.circle.fill" onPress={() => {}} />
-      </Stack.Toolbar>
       <ScrollView
-        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: 32 }}
       >
-        <View className="gap-8 px-5 pt-6">
-          <View className="gap-3">
-            <Badge variant="secondary" className="self-start">
-              <Text>v0.1 · template</Text>
-            </Badge>
-            <Text className="text-4xl font-extrabold tracking-tight text-foreground">
+        <View className="flex-1 items-center justify-between px-8 pb-10 pt-16">
+          <View className="items-center gap-4">
+            <View className="h-20 w-20 items-center justify-center rounded-full bg-secondary">
+              <Sparkles size={36} className="text-foreground" />
+            </View>
+            <Text className="text-center text-3xl font-extrabold tracking-tight text-foreground">
               Welcome
             </Text>
-            <Text className="text-base text-muted-foreground">
-              A cross-platform starter with sensible defaults. Edit{" "}
-              <Text className="font-medium text-foreground">
-                app/(tabs)/index.tsx
-              </Text>{" "}
-              to make it yours.
+            <Text className="text-center text-base text-muted-foreground">
+              A cross-platform starter with sensible defaults.
             </Text>
           </View>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>What's inside</CardTitle>
-              <CardDescription>
-                Everything you need to start building.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="gap-4">
-              {FEATURES.map((feature) => {
-                const Icon = feature.icon;
-                return (
-                  <View
-                    key={feature.title}
-                    className="flex-row items-start gap-4"
-                  >
-                    <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-                      <Icon size={20} className="text-foreground" />
-                    </View>
-                    <View className="flex-1 gap-1">
-                      <Text className="text-base font-semibold text-foreground">
-                        {feature.title}
-                      </Text>
-                      <Text className="text-sm text-muted-foreground">
-                        {feature.description}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <View className="gap-3">
+          <View className="w-full gap-3">
             <Button onPress={() => {}}>
               <Text>Get started</Text>
             </Button>
-            <Button variant="outline" onPress={() => {}}>
+            <Button variant="ghost" onPress={() => {}}>
               <Text>View the docs</Text>
             </Button>
           </View>
@@ -960,9 +894,8 @@ export default function SettingsScreen() {
 
 **Notes:**
 - `NativeTabs` from `expo-router/unstable-native-tabs` gets the iOS 26+ liquid glass tab bar automatically. On Android it falls back to Material 3 bottom navigation. SF icons are set via `sf=`; Android via `drawable=` (not `md=`).
-- `Stack.Toolbar` is **iOS only** (SDK 55+). On Android the top-right button just won't render — the tabs and content still work. That's acceptable for a starter; teammates can add an Android-specific toolbar later.
-- SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs and Stack.Toolbar accept them directly. `square.fill` / `diamond.fill` / `triangle.fill` are used deliberately as generic placeholder icons — swap to semantic ones (`house.fill`, `magnifyingglass`, `gearshape.fill`) when the product concept is defined.
-- The header right button (`plus.circle.fill`) is intentionally a no-op — it's there to demonstrate the Stack.Toolbar pattern, not to do anything.
+- SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs accepts them directly. `square.fill` / `diamond.fill` / `triangle.fill` are used deliberately as generic placeholder icons — swap to semantic ones (`house.fill`, `magnifyingglass`, `gearshape.fill`) when the product concept is defined.
+- `Stack.Toolbar` is deliberately NOT used on the Home screen. It's iOS-only (SDK 55+), adds noise to a minimal welcome screen, and the pattern is easy to add later. If you need it for another screen, `<Stack.Toolbar placement="right"><Stack.Toolbar.Button icon="plus.circle.fill" onPress={...} /></Stack.Toolbar>` inside a `<Stack.Screen>` component is the full recipe.
 - Dark mode is **OS-driven** via RN's `useColorScheme()`. No in-app toggle, no `lib/theme.tsx` ThemeContext — users flip it in Control Center. The `@media (prefers-color-scheme: dark) { :root { ... } }` block generated by `sync:tokens` (step A4f.5) handles the CSS variable flip automatically.
 - `lucide-react-native` icons are used inline on Home/Browse/Settings (Layers, Palette, Zap, Box, Type, MousePointerClick, Layout, Bell, ChevronRight). The reusables bulk-install in A4d.5 adds this as a peer dep.
 - Card composition rule: use `Card > CardHeader (CardTitle + CardDescription) > CardContent` — do NOT strip Card's default `py-6 gap-6` padding to hack a full-bleed row list. For iOS-grouped-row patterns (Settings), use a plain `bg-card border border-border rounded-xl` View instead — Card is the wrong primitive for that shape.
