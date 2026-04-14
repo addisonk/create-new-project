@@ -342,12 +342,12 @@ export function Button({ className, variant, size, children, ...props }: ButtonP
 export { buttonVariants, buttonTextVariants };
 ```
 
-Then create `apps/mobile/components.json` (reusables CLI config so `@react-native-reusables/cli add` works later):
+Then create `apps/mobile/components.json` with the EXACT structure below. This matches what the reusables CLI considers "valid" so the bulk install step (A4d.5) doesn't trigger the "update components.json?" prompt (which mangles the file when piped — specifically the "Tailwind config path?" sub-prompt gets answered "y" from the `yes` pipe and writes `"config": "y"`):
 
 ```json
 {
-  "$schema": "https://reactnativereusables.com/schema.json",
-  "style": "default",
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
   "rsc": false,
   "tsx": true,
   "tailwind": {
@@ -362,12 +362,31 @@ Then create `apps/mobile/components.json` (reusables CLI config so `@react-nativ
     "ui": "@/components/ui",
     "lib": "@/lib",
     "hooks": "@/hooks"
-  },
-  "iconLibrary": "lucide"
+  }
 }
 ```
 
 And ensure `<PortalHost />` is rendered in `apps/mobile/app/_layout.tsx` (for dialogs/menus/popovers from reusables).
+
+### A4d.5 — Bulk install ALL reusables components
+
+With `components.json` in place, install all ~30 react-native-reusables components in one non-interactive shot. This is what actually makes `Card`, `Switch`, `Dialog`, `Input`, `Select`, `Tabs`, etc. usable — without this step, the mobile app has no reusables components installed and `import { Card } from "@/components/ui/card"` will fail.
+
+```bash
+cd {parent}/{name}/apps/mobile
+yes | npx @react-native-reusables/cli@latest add -a -y -o
+```
+
+**Important flags:**
+- `-a` — add all components
+- `-y` — skip individual "add this?" confirmations
+- `-o` — overwrite existing files (important: the manual `text.tsx` and `button.tsx` we wrote in A4d will be replaced with the canonical CLI versions, which is what we want — the canonical versions use `className=` directly on RN primitives and don't need `useCssElement` wrapping)
+- `yes |` — pipes continuous `y` answers to any straggler prompts that `-y` doesn't cover
+
+**After the install:**
+- Verify `apps/mobile/components.json` still has `"tailwind.config": ""` (not `"y"`). The CLI may mangle this if any prompts slip through. Fix manually if so.
+- 5-minute timeout — the CLI downloads each component file + installs `@rn-primitives/*` deps automatically.
+- Note: the canonical reusables `text.tsx` and `button.tsx` pass `className=` directly to `RNText`/`Pressable`. They rely on `globalClassNamePolyfill: true` in metro.config.js (set in step A5 below). If the polyfill is false, these components render but className has no effect.
 
 **Step A4e — install `@expo/ui` for native primitives:**
 
@@ -774,8 +793,9 @@ config.resolver.nodeModulesPaths = [
 ];
 
 module.exports = withNativeWind(config, {
-  inlineVariables: false,          // keeps PlatformColor working in CSS variables
-  globalClassNamePolyfill: false,  // tw/ wrappers handle className explicitly
+  inlineVariables: false,         // keeps PlatformColor working in CSS variables
+  globalClassNamePolyfill: true,  // REQUIRED: react-native-reusables components pass className
+                                  // directly to RN primitives. Without this, nothing renders.
 });
 ```
 
