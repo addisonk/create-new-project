@@ -225,6 +225,130 @@ cd {parent}/{name}/apps/mobile
 npx @react-native-reusables/cli@latest add
 ```
 
+### A4g — Replace default Expo template with welcome screen
+
+`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built welcome that demonstrates the stack: NativeTabs (iOS 26+ liquid glass), a header right toolbar button, and a reusables Text + Button card.
+
+This proves four things at first glance: NativeTabs work, Stack.Toolbar works, NativeWind v5 + reusables Text renders, and reusables Button is wired.
+
+**Replace `apps/mobile/app/(tabs)/_layout.tsx`:**
+
+```tsx
+import { NativeTabs } from "expo-router/unstable-native-tabs";
+
+export default function TabLayout() {
+  return (
+    <NativeTabs minimizeBehavior="onScrollDown">
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Icon sf="house.fill" md="home" />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="explore">
+        <NativeTabs.Trigger.Icon sf="safari.fill" md="explore" />
+        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon sf="gearshape.fill" md="settings" />
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
+  );
+}
+```
+
+**Replace `apps/mobile/app/(tabs)/index.tsx`** (substitute `{name}` with the actual project name):
+
+```tsx
+import { ScrollView } from "react-native";
+import { Stack } from "expo-router";
+import { View } from "@/tw";
+import { Text } from "@/components/ui/text";
+import { Button } from "@/components/ui/button";
+
+export default function HomeScreen() {
+  return (
+    <>
+      <Stack.Screen options={{ title: "{name}" }} />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button icon="plus.circle.fill" onPress={() => {}} />
+      </Stack.Toolbar>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+      >
+        <View className="flex-1 items-center justify-center gap-6 px-8 py-24">
+          <Text className="text-3xl font-bold text-center">
+            Welcome to {name}
+          </Text>
+          <Text className="text-base text-muted-foreground text-center">
+            Your cross-platform scaffold is ready.{"\n"}
+            Edit app/(tabs)/index.tsx to start building.
+          </Text>
+          <Button onPress={() => {}}>
+            <Text>Get started</Text>
+          </Button>
+        </View>
+      </ScrollView>
+    </>
+  );
+}
+```
+
+**Replace `apps/mobile/app/(tabs)/explore.tsx`** (stub):
+
+```tsx
+import { ScrollView } from "react-native";
+import { Stack } from "expo-router";
+import { View } from "@/tw";
+import { Text } from "@/components/ui/text";
+
+export default function ExploreScreen() {
+  return (
+    <>
+      <Stack.Screen options={{ title: "Explore" }} />
+      <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic">
+        <View className="flex-1 items-center justify-center px-8 py-24">
+          <Text className="text-base text-muted-foreground text-center">
+            Explore tab — replace this with your own content.
+          </Text>
+        </View>
+      </ScrollView>
+    </>
+  );
+}
+```
+
+**Create `apps/mobile/app/(tabs)/settings.tsx`** (new file, stub):
+
+```tsx
+import { ScrollView } from "react-native";
+import { Stack } from "expo-router";
+import { View } from "@/tw";
+import { Text } from "@/components/ui/text";
+
+export default function SettingsScreen() {
+  return (
+    <>
+      <Stack.Screen options={{ title: "Settings" }} />
+      <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic">
+        <View className="flex-1 items-center justify-center px-8 py-24">
+          <Text className="text-base text-muted-foreground text-center">
+            Settings tab — replace this with your own content.
+          </Text>
+        </View>
+      </ScrollView>
+    </>
+  );
+}
+```
+
+**Notes:**
+- `NativeTabs` from `expo-router/unstable-native-tabs` gets the iOS 26+ liquid glass tab bar automatically. On Android it falls back to Material 3 bottom navigation.
+- `Stack.Toolbar` is **iOS only** (SDK 55+). On Android the top-right button just won't render — the tabs and content still work. That's acceptable for a starter; teammates can add an Android-specific toolbar later.
+- SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs and Stack.Toolbar accept them directly.
+- The header right button (`plus.circle.fill`) is intentionally a no-op — it's there to demonstrate the Stack.Toolbar pattern, not to do anything.
+- If a different (or older) template is being used and there's no `app/(tabs)/` directory, follow the `building-native-ui` skill's `route-structure.md` reference for the right place to put these files.
+
 ### A5. Patch `apps/mobile/metro.config.js` for the monorepo
 
 Replace/write the metro config to watch the monorepo root and resolve from both app and root `node_modules`:
