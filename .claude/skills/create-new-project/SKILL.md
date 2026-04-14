@@ -187,7 +187,7 @@ pnpm add connect           # explicit dep — react-native-css-interop needs it 
 Then:
 - Delete any `babel.config.js` and `tailwind.config.js` that `create-expo-app` may have created (NativeWind v5 is CSS-first, no babel preset required)
 - Create `apps/mobile/postcss.config.mjs` → `{ plugins: { "@tailwindcss/postcss": {} } }`
-- Create `apps/mobile/global.css` with Tailwind v4 imports + platform-specific font variables (per `expo-tailwind-setup`)
+- **Skip writing `apps/mobile/global.css` here** — Step A4f.5 generates it from web's tokens via the sync script. Just make sure `apps/mobile/app/_layout.tsx` imports `"@/global.css"`.
 - Create `apps/mobile/tw/index.tsx` with CSS-enabled wrappers using `useCssElement` from react-native-css. **CRITICAL: the third argument to `useCssElement` is required.** It maps the className prop to a style prop on the underlying component. Without it, you get "Cannot convert undefined value to object" at render time. The signature is `useCssElement(Component, props, { className: "style" })`. ScrollView additionally needs `contentContainerClassName: "contentContainerStyle"`. Use exactly this template:
 
   ```tsx
@@ -393,6 +393,130 @@ pnpm add buffer
 cd {parent}/{name}/apps/mobile
 npx @react-native-reusables/cli@latest add
 ```
+
+### A4f.5 — Add web→mobile token sync script
+
+The mobile `global.css` is **generated from web's `packages/ui/src/styles/globals.css`** so design tokens stay in sync. Web is the source of truth; the script converts oklch() colors (which React Native cannot parse) to hex on the way over.
+
+**Why this matters:** without sync, `bg-primary`, `text-foreground`, etc. on the mobile reusables components resolve to nothing because mobile's tokens won't match the format Tailwind v4 expects.
+
+**Step 1 — add `culori` as a root devDependency:**
+
+```bash
+cd {parent}/{name}
+pnpm add -Dw culori
+```
+
+**Step 2 — write `scripts/sync-mobile-tokens.mjs`:**
+
+```js
+#!/usr/bin/env node
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parse, formatHex } from "culori";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const WEB_TOKENS = resolve(ROOT, "packages/ui/src/styles/globals.css");
+const MOBILE_TOKENS = resolve(ROOT, "apps/mobile/global.css");
+
+const MOBILE_TOKEN_NAMES = [
+  "background", "foreground",
+  "card", "card-foreground",
+  "popover", "popover-foreground",
+  "primary", "primary-foreground",
+  "secondary", "secondary-foreground",
+  "muted", "muted-foreground",
+  "accent", "accent-foreground",
+  "destructive", "destructive-foreground",
+  "border", "input", "ring",
+];
+
+function parseTokenBlock(css, selector) {
+  const re = new RegExp(`${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]+)\\}`);
+  const match = css.match(re);
+  if (!match) return {};
+  const out = {};
+  for (const line of match[1].split("\n")) {
+    const m = line.trim().match(/^--([\w-]+):\s*([^;]+);?$/);
+    if (!m) continue;
+    out[m[1]] = m[2].trim();
+  }
+  return out;
+}
+
+function toHex(value) {
+  try {
+    const parsed = parse(value);
+    return parsed ? formatHex(parsed) : null;
+  } catch { return null; }
+}
+
+function generateMobileCSS(lightTokens) {
+  const themeLines = [];
+  for (const name of MOBILE_TOKEN_NAMES) {
+    const value = lightTokens[name];
+    if (!value) continue;
+    const hex = toHex(value);
+    if (!hex) continue;
+    themeLines.push(`  --color-${name}: ${hex};`);
+  }
+  if (!themeLines.find((l) => l.includes("--color-destructive-foreground"))) {
+    themeLines.push(`  --color-destructive-foreground: #ffffff;`);
+  }
+  return `/*
+ * DO NOT EDIT — generated from packages/ui/src/styles/globals.css.
+ * Run \\\`pnpm sync:tokens\\\` from the monorepo root to regenerate.
+ */
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@media android {
+  :root { --font-mono: monospace; --font-sans: normal; }
+}
+@media ios {
+  :root { --font-mono: ui-monospace; --font-sans: system-ui; }
+}
+
+@theme {
+${themeLines.join("\n")}
+}
+`;
+}
+
+const webCss = readFileSync(WEB_TOKENS, "utf-8");
+const lightTokens = parseTokenBlock(webCss, ":root");
+const mobileCss = generateMobileCSS(lightTokens);
+mkdirSync(dirname(MOBILE_TOKENS), { recursive: true });
+writeFileSync(MOBILE_TOKENS, mobileCss);
+console.log(`wrote ${MOBILE_TOKENS} (${Object.keys(lightTokens).length} tokens)`);
+```
+
+**Step 3 — wire it into root `package.json` scripts:**
+
+Add these to the existing `"scripts"` block. The key behavior is that `dev:mobile` chains `sync:tokens` so it runs every time the mobile dev server starts:
+
+```json
+{
+  "scripts": {
+    "sync:tokens": "node scripts/sync-mobile-tokens.mjs",
+    "dev:mobile": "pnpm sync:tokens && turbo --filter mobile dev"
+  }
+}
+```
+
+**Step 4 — run it once to generate the initial `apps/mobile/global.css`:**
+
+```bash
+cd {parent}/{name}
+pnpm sync:tokens
+```
+
+This overwrites whatever `apps/mobile/global.css` was scaffolded earlier. Going forward, teammates either run `pnpm sync:tokens` manually or rely on `pnpm dev:mobile` to do it automatically.
+
+**Important:** the generated `apps/mobile/global.css` has a `DO NOT EDIT` header. To change colors, teammates edit `packages/ui/src/styles/globals.css` (the web/shadcn source) and re-run `pnpm sync:tokens`.
 
 ### A4g — Replace default Expo template with welcome screen
 
