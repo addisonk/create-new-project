@@ -40,11 +40,11 @@ Run these checks and collect failures into a single report:
 
 **Mobile (Both or Mobile-only paths only):**
 - `xcode-select -p` — should print a path. If it errors or returns "no developer tools": "Install Xcode from the Mac App Store, then run `sudo xcode-select --install`"
-- `xcodebuild -version` — should print something like `Xcode 26.4`. Extract the major version (e.g. `26`).
-- `xcrun simctl list runtimes -j 2>/dev/null` — parse JSON; the `runtimes` array must contain at least one entry whose `name` matches the **same major version as Xcode**. For example, if Xcode is `26.4`, an `iOS 18.6` runtime is NOT enough — you need an `iOS 26.x` runtime. Xcode requires a matching iOS SDK to compile, even if you only ever target older simulators.
-  - If no matching runtime: "Your Xcode is `{xcode_version}` but no `iOS {xcode_major}.x` simulator runtime is installed. Without it, `xcodebuild` fails on the very first build with `Unable to find a destination`. Install it from the CLI (no Xcode UI needed): `xcodebuild -downloadPlatform iOS` — note: this is ~8 GB and takes 15–20 minutes. Re-run the skill once it's done."
-  - Do NOT just check for "any iOS runtime exists" — that's the bug we hit on 2026-04-13.
-- `xcrun simctl list devices available -j 2>/dev/null` — at least one device must exist that uses a runtime matching Xcode's major version. Same fix if not.
+- `xcodebuild -version` — should print something like `Xcode 26.4`. Extract **both major and minor** (e.g. `26.4`).
+- `xcrun simctl list runtimes -j 2>/dev/null` — parse JSON; the `runtimes` array must contain at least one entry whose `version` field matches Xcode's **exact major.minor** (e.g. Xcode `26.4` → require iOS `26.4`). Matching only the major (e.g. accepting `iOS 26.2` for Xcode `26.4`) is NOT enough — Xcode needs the SDK that ships with its exact point release, and `xcodebuild` will fail with `Unable to find a destination` even though the simulator list looks populated.
+  - If no exact match: "Your Xcode is `{xcode_version}` but no `iOS {xcode_major}.{xcode_minor}` simulator runtime is installed (closest installed: `{closest_installed}`). Xcode requires the SDK from its own point release — a near-miss like `iOS 26.2` for Xcode `26.4` will still fail `xcodebuild` with `Unable to find a destination`. Install it from the CLI (no Xcode UI needed): `xcodebuild -downloadPlatform iOS` — note: this is ~8 GB and takes 15–20 minutes. Re-run the skill once it's done."
+  - Do NOT match on major version alone — that's the bug we hit twice (2026-04-13 first pass: "any iOS runtime"; second pass: "any iOS 26.x runtime"). Match on **major.minor**.
+- `xcrun simctl list devices available -j 2>/dev/null` — at least one device must exist whose runtime matches Xcode's exact major.minor. Same fix if not.
 
 **If ANY check fails:**
 - STOP. Do not proceed to Step 1.
@@ -509,8 +509,10 @@ function generateMobileCSS(lightTokens, darkTokens) {
 ${lightBlock}
 }
 
-.dark {
-${darkBlock}
+@media (prefers-color-scheme: dark) {
+  :root {
+${darkBlock.replace(/^/gm, "  ")}
+  }
 }
 `;
 }
@@ -550,9 +552,9 @@ This overwrites whatever `apps/mobile/global.css` was scaffolded earlier. Going 
 
 ### A4g — Replace default Expo template with welcome screen
 
-`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built welcome that demonstrates the stack: NativeTabs (iOS 26+ liquid glass), a header right toolbar button, and a reusables Text + Button card.
+`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built three-tab starter that demonstrates the stack end-to-end: NativeTabs with SF Symbol icons, a header toolbar button, reusables `Card`/`Button`/`Badge`/`Avatar`/`Separator` used properly, semantic theme tokens, OS-driven dark mode, and lucide icons rendered inline.
 
-This proves four things at first glance: NativeTabs work, Stack.Toolbar works, NativeWind v5 + reusables Text renders, and reusables Button is wired.
+Every screen proves something: Home shows Card composition (Header + Content) + primary/outline button group, Browse shows a feed of Cards with inline icons and Badges, Settings shows an iOS-style grouped-row list with Avatar header.
 
 **Replace `apps/mobile/app/(tabs)/_layout.tsx`:**
 
@@ -563,15 +565,15 @@ export default function TabLayout() {
   return (
     <NativeTabs minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf="house.fill" md="home" />
+        <NativeTabs.Trigger.Icon sf="square.fill" drawable="square" />
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Icon sf="safari.fill" md="explore" />
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="diamond.fill" drawable="diamond" />
+        <NativeTabs.Trigger.Label>Browse</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Icon sf="gearshape.fill" md="settings" />
+        <NativeTabs.Trigger.Icon sf="triangle.fill" drawable="triangle" />
         <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
@@ -579,37 +581,111 @@ export default function TabLayout() {
 }
 ```
 
-**Replace `apps/mobile/app/(tabs)/index.tsx`** (substitute `{name}` with the actual project name):
+**Replace `apps/mobile/app/(tabs)/index.tsx`:**
 
 ```tsx
 import { ScrollView } from "react-native";
 import { Stack } from "expo-router";
+import { Palette, Layers, Zap } from "lucide-react-native";
 import { View } from "@/tw";
 import { Text } from "@/components/ui/text";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+const FEATURES = [
+  {
+    icon: Layers,
+    title: "Reusable components",
+    description: "Card, Button, Badge, Dialog, and 30+ more, pre-installed.",
+  },
+  {
+    icon: Palette,
+    title: "Themed tokens",
+    description: "Light and dark mode wired to your design system.",
+  },
+  {
+    icon: Zap,
+    title: "Native-fast",
+    description: "NativeTabs, Expo Router, and Reanimated out of the box.",
+  },
+];
 
 export default function HomeScreen() {
   return (
     <>
-      <Stack.Screen options={{ title: "{name}" }} />
+      <Stack.Screen options={{ title: "Home" }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button icon="plus.circle.fill" onPress={() => {}} />
       </Stack.Toolbar>
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 32 }}
       >
-        <View className="flex-1 items-center justify-center gap-6 px-8 py-24">
-          <Text className="text-3xl font-bold text-center">
-            Welcome to {name}
-          </Text>
-          <Text className="text-base text-muted-foreground text-center">
-            Your cross-platform scaffold is ready.{"\n"}
-            Edit app/(tabs)/index.tsx to start building.
-          </Text>
-          <Button onPress={() => {}}>
-            <Text>Get started</Text>
-          </Button>
+        <View className="gap-8 px-5 pt-6">
+          <View className="gap-3">
+            <Badge variant="secondary" className="self-start">
+              <Text>v0.1 · template</Text>
+            </Badge>
+            <Text className="text-4xl font-extrabold tracking-tight text-foreground">
+              Welcome
+            </Text>
+            <Text className="text-base text-muted-foreground">
+              A cross-platform starter with sensible defaults. Edit{" "}
+              <Text className="font-medium text-foreground">
+                app/(tabs)/index.tsx
+              </Text>{" "}
+              to make it yours.
+            </Text>
+          </View>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>What's inside</CardTitle>
+              <CardDescription>
+                Everything you need to start building.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="gap-4">
+              {FEATURES.map((feature) => {
+                const Icon = feature.icon;
+                return (
+                  <View
+                    key={feature.title}
+                    className="flex-row items-start gap-4"
+                  >
+                    <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
+                      <Icon size={20} className="text-foreground" />
+                    </View>
+                    <View className="flex-1 gap-1">
+                      <Text className="text-base font-semibold text-foreground">
+                        {feature.title}
+                      </Text>
+                      <Text className="text-sm text-muted-foreground">
+                        {feature.description}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          <View className="gap-3">
+            <Button onPress={() => {}}>
+              <Text>Get started</Text>
+            </Button>
+            <Button variant="outline" onPress={() => {}}>
+              <Text>View the docs</Text>
+            </Button>
+          </View>
         </View>
       </ScrollView>
     </>
@@ -617,23 +693,110 @@ export default function HomeScreen() {
 }
 ```
 
-**Replace `apps/mobile/app/(tabs)/explore.tsx`** (stub):
+**Replace `apps/mobile/app/(tabs)/explore.tsx`:**
 
 ```tsx
 import { ScrollView } from "react-native";
 import { Stack } from "expo-router";
+import {
+  Box,
+  Palette,
+  Type,
+  MousePointerClick,
+  Layout,
+  Bell,
+} from "lucide-react-native";
 import { View } from "@/tw";
 import { Text } from "@/components/ui/text";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+const SECTIONS = [
+  {
+    icon: Box,
+    title: "Components",
+    description: "30+ pre-installed reusables — cards, dialogs, sheets.",
+    tag: "UI",
+  },
+  {
+    icon: Type,
+    title: "Typography",
+    description: "System font scale with h1–h4, body, and muted styles.",
+    tag: "Text",
+  },
+  {
+    icon: Palette,
+    title: "Theme tokens",
+    description: "Semantic colors that flip automatically with dark mode.",
+    tag: "Design",
+  },
+  {
+    icon: Layout,
+    title: "Layout",
+    description: "Native tabs, stack, safe areas, and toolbars built in.",
+    tag: "Nav",
+  },
+  {
+    icon: MousePointerClick,
+    title: "Interactions",
+    description: "Haptic-ready pressables and spring animations.",
+    tag: "Motion",
+  },
+  {
+    icon: Bell,
+    title: "System",
+    description: "Notifications, portal, and gesture handler wired up.",
+    tag: "Native",
+  },
+];
 
 export default function ExploreScreen() {
   return (
     <>
-      <Stack.Screen options={{ title: "Explore" }} />
-      <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic">
-        <View className="flex-1 items-center justify-center px-8 py-24">
-          <Text className="text-base text-muted-foreground text-center">
-            Explore tab — replace this with your own content.
-          </Text>
+      <Stack.Screen options={{ title: "Browse" }} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 32 }}
+      >
+        <View className="gap-5 px-5 pt-6">
+          <View className="gap-2">
+            <Text className="text-3xl font-bold tracking-tight text-foreground">
+              Browse
+            </Text>
+            <Text className="text-base text-muted-foreground">
+              A quick tour of everything that ships with the template.
+            </Text>
+          </View>
+
+          <View className="gap-3">
+            {SECTIONS.map((section) => {
+              const Icon = section.icon;
+              return (
+                <Card key={section.title}>
+                  <CardHeader className="flex-row items-start gap-4">
+                    <View className="h-11 w-11 items-center justify-center rounded-xl bg-secondary">
+                      <Icon size={22} className="text-foreground" />
+                    </View>
+                    <View className="flex-1 gap-1.5">
+                      <View className="flex-row items-center gap-2">
+                        <CardTitle>{section.title}</CardTitle>
+                        <Badge variant="outline">
+                          <Text>{section.tag}</Text>
+                        </Badge>
+                      </View>
+                      <CardDescription>{section.description}</CardDescription>
+                    </View>
+                  </CardHeader>
+                </Card>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </>
@@ -641,57 +804,7 @@ export default function ExploreScreen() {
 }
 ```
 
-**Create `apps/mobile/lib/theme.tsx`** (theme context with light/dark/system support, manual override via NativeWind's setColorScheme):
-
-```tsx
-import * as React from "react";
-import { useColorScheme } from "nativewind";
-
-type ThemeMode = "light" | "dark" | "system";
-
-interface ThemeContextValue {
-  mode: ThemeMode;
-  resolved: "light" | "dark";
-  setMode: (mode: ThemeMode) => void;
-  toggle: () => void;
-}
-
-const ThemeContext = React.createContext<ThemeContextValue | null>(null);
-
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { colorScheme, setColorScheme } = useColorScheme();
-  const [mode, setModeState] = React.useState<ThemeMode>("system");
-
-  const resolved: "light" | "dark" = colorScheme === "dark" ? "dark" : "light";
-
-  const setMode = React.useCallback(
-    (next: ThemeMode) => {
-      setModeState(next);
-      setColorScheme(next);
-    },
-    [setColorScheme]
-  );
-
-  const toggle = React.useCallback(() => {
-    setMode(resolved === "dark" ? "light" : "dark");
-  }, [resolved, setMode]);
-
-  const value = React.useMemo(
-    () => ({ mode, resolved, setMode, toggle }),
-    [mode, resolved, setMode, toggle]
-  );
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme() {
-  const ctx = React.useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used inside ThemeProvider");
-  return ctx;
-}
-```
-
-**Wire it into `apps/mobile/app/_layout.tsx`** — wrap the root with `ThemeProvider`, then nest a child component that consumes `useTheme()` so the React Navigation `ThemeProvider` and `StatusBar` style respond to the active mode:
+**Wire `apps/mobile/app/_layout.tsx`** — OS-driven dark mode via RN's `useColorScheme()` (no custom ThemeContext, no in-app toggle):
 
 ```tsx
 import "@/global.css";
@@ -703,62 +816,141 @@ import {
 import { PortalHost } from "@rn-primitives/portal";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useColorScheme } from "react-native";
 import "react-native-reanimated";
-
-import { ThemeProvider, useTheme } from "@/lib/theme";
 
 export const unstable_settings = { anchor: "(tabs)" };
 
-function RootStack() {
-  const { resolved } = useTheme();
+export default function RootLayout() {
+  const scheme = useColorScheme();
+  const isDark = scheme === "dark";
   return (
-    <NavThemeProvider value={resolved === "dark" ? DarkTheme : DefaultTheme}>
+    <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <Stack>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
       </Stack>
-      <StatusBar style={resolved === "dark" ? "light" : "dark"} />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <PortalHost />
     </NavThemeProvider>
   );
 }
-
-export default function RootLayout() {
-  return (
-    <ThemeProvider>
-      <RootStack />
-    </ThemeProvider>
-  );
-}
 ```
 
-**Replace `apps/mobile/app/(tabs)/settings.tsx`** with a real cell that toggles dark mode (uses React Native's built-in `Switch` to avoid an extra reusables CLI install):
+**Replace `apps/mobile/app/(tabs)/settings.tsx`** with an iOS-style grouped-row list (Avatar header + three Card-styled sections):
 
 ```tsx
-import { ScrollView, Switch } from "react-native";
+import { ScrollView } from "react-native";
 import { Stack } from "expo-router";
-import { View } from "@/tw";
+import { ChevronRight } from "lucide-react-native";
+import { View, Pressable } from "@/tw";
 import { Text } from "@/components/ui/text";
-import { useTheme } from "@/lib/theme";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+
+type Row = {
+  label: string;
+  value?: string;
+  badge?: string;
+};
+
+type Section = {
+  title: string;
+  rows: Row[];
+};
+
+const SECTIONS: Section[] = [
+  {
+    title: "Account",
+    rows: [
+      { label: "Profile", value: "You" },
+      { label: "Email", value: "you@example.com" },
+      { label: "Subscription", badge: "Pro" },
+    ],
+  },
+  {
+    title: "Preferences",
+    rows: [
+      { label: "Appearance", value: "System" },
+      { label: "Notifications", value: "On" },
+      { label: "Language", value: "English" },
+    ],
+  },
+  {
+    title: "About",
+    rows: [
+      { label: "Version", value: "0.1.0" },
+      { label: "Privacy Policy" },
+      { label: "Terms of Service" },
+    ],
+  },
+];
+
+function SettingsRow({ row, isLast }: { row: Row; isLast: boolean }) {
+  return (
+    <>
+      <Pressable className="flex-row items-center justify-between px-5 py-4 active:bg-accent">
+        <Text className="text-base text-card-foreground">{row.label}</Text>
+        <View className="flex-row items-center gap-2">
+          {row.value ? (
+            <Text className="text-sm text-muted-foreground">{row.value}</Text>
+          ) : null}
+          {row.badge ? (
+            <Badge>
+              <Text>{row.badge}</Text>
+            </Badge>
+          ) : null}
+          <ChevronRight size={18} className="text-muted-foreground" />
+        </View>
+      </Pressable>
+      {isLast ? null : <Separator className="ml-5" />}
+    </>
+  );
+}
 
 export default function SettingsScreen() {
-  const { resolved, toggle } = useTheme();
-  const isDark = resolved === "dark";
-
   return (
     <>
       <Stack.Screen options={{ title: "Settings" }} />
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 32 }}
       >
-        <View className="px-4 pt-6">
-          <View className="rounded-xl border border-border bg-card overflow-hidden">
-            <View className="flex-row items-center justify-between px-4 py-3">
-              <Text className="text-base text-foreground">Dark mode</Text>
-              <Switch value={isDark} onValueChange={toggle} />
+        <View className="gap-6 px-5 pt-6">
+          <View className="flex-row items-center gap-4">
+            <Avatar alt="You" className="h-16 w-16">
+              <AvatarFallback>
+                <Text className="text-lg font-semibold">A</Text>
+              </AvatarFallback>
+            </Avatar>
+            <View className="flex-1 gap-1">
+              <Text className="text-xl font-semibold text-foreground">
+                Welcome
+              </Text>
+              <Text className="text-sm text-muted-foreground">
+                you@example.com
+              </Text>
             </View>
           </View>
+
+          {SECTIONS.map((section) => (
+            <View key={section.title} className="gap-2">
+              <Text className="px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {section.title}
+              </Text>
+              <View className="overflow-hidden rounded-xl border border-border bg-card">
+                {section.rows.map((row, i) => (
+                  <SettingsRow
+                    key={row.label}
+                    row={row}
+                    isLast={i === section.rows.length - 1}
+                  />
+                ))}
+              </View>
+            </View>
+          ))}
         </View>
       </ScrollView>
     </>
@@ -767,10 +959,13 @@ export default function SettingsScreen() {
 ```
 
 **Notes:**
-- `NativeTabs` from `expo-router/unstable-native-tabs` gets the iOS 26+ liquid glass tab bar automatically. On Android it falls back to Material 3 bottom navigation.
+- `NativeTabs` from `expo-router/unstable-native-tabs` gets the iOS 26+ liquid glass tab bar automatically. On Android it falls back to Material 3 bottom navigation. SF icons are set via `sf=`; Android via `drawable=` (not `md=`).
 - `Stack.Toolbar` is **iOS only** (SDK 55+). On Android the top-right button just won't render — the tabs and content still work. That's acceptable for a starter; teammates can add an Android-specific toolbar later.
-- SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs and Stack.Toolbar accept them directly.
+- SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs and Stack.Toolbar accept them directly. `square.fill` / `diamond.fill` / `triangle.fill` are used deliberately as generic placeholder icons — swap to semantic ones (`house.fill`, `magnifyingglass`, `gearshape.fill`) when the product concept is defined.
 - The header right button (`plus.circle.fill`) is intentionally a no-op — it's there to demonstrate the Stack.Toolbar pattern, not to do anything.
+- Dark mode is **OS-driven** via RN's `useColorScheme()`. No in-app toggle, no `lib/theme.tsx` ThemeContext — users flip it in Control Center. The `@media (prefers-color-scheme: dark) { :root { ... } }` block generated by `sync:tokens` (step A4f.5) handles the CSS variable flip automatically.
+- `lucide-react-native` icons are used inline on Home/Browse/Settings (Layers, Palette, Zap, Box, Type, MousePointerClick, Layout, Bell, ChevronRight). The reusables bulk-install in A4d.5 adds this as a peer dep.
+- Card composition rule: use `Card > CardHeader (CardTitle + CardDescription) > CardContent` — do NOT strip Card's default `py-6 gap-6` padding to hack a full-bleed row list. For iOS-grouped-row patterns (Settings), use a plain `bg-card border border-border rounded-xl` View instead — Card is the wrong primitive for that shape.
 - If a different (or older) template is being used and there's no `app/(tabs)/` directory, follow the `building-native-ui` skill's `route-structure.md` reference for the right place to put these files.
 
 ### A5. Patch `apps/mobile/metro.config.js` for the monorepo
