@@ -222,12 +222,152 @@ Then:
 
 **Step A4d — add reusables foundation files:**
 
-Follow the **`react-native-reusables` skill** for these:
-- `apps/mobile/lib/utils.ts` — exporting `cn()` (clsx + tailwind-merge)
-- `apps/mobile/components.json` — reusables CLI config (so `@react-native-reusables/cli add` works later)
-- `apps/mobile/components/ui/text.tsx` — Text component with `TextClassContext`
-- `apps/mobile/components/ui/button.tsx` — Button component with CVA variants and `Platform.select` for hover/active
-- `<PortalHost />` in `apps/mobile/app/_layout.tsx` (for dialogs/menus/popovers from reusables)
+Follow the **`react-native-reusables` skill** for the philosophy and component conventions, but use the EXACT templates below for the foundation files. Claude has a strong tendency to drop the third argument to `useCssElement` when generating these freehand, which causes "Cannot convert undefined value to object" at render time. The third argument is **required**.
+
+`apps/mobile/lib/utils.ts`:
+
+```ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+`apps/mobile/components/ui/text.tsx`:
+
+```tsx
+import * as React from "react";
+import { Text as RNText, type TextProps } from "react-native";
+import { useCssElement } from "react-native-css";
+import { cn } from "@/lib/utils";
+
+export const TextClassContext = React.createContext<string | undefined>(undefined);
+
+type Props = TextProps & { className?: string; asChild?: boolean };
+
+export function Text({ className, ...props }: Props) {
+  const inheritedClass = React.useContext(TextClassContext);
+  return useCssElement(
+    RNText,
+    {
+      ...props,
+      className: cn("text-base text-foreground web:select-text", inheritedClass, className),
+    },
+    { className: "style" }
+  );
+}
+```
+
+`apps/mobile/components/ui/button.tsx`:
+
+```tsx
+import * as React from "react";
+import { Pressable as RNPressable, Platform, type PressableProps } from "react-native";
+import { useCssElement } from "react-native-css";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+import { TextClassContext } from "@/components/ui/text";
+
+const buttonVariants = cva(
+  "group flex items-center justify-center rounded-md " +
+    Platform.select({
+      web: "transition-colors active:opacity-90 hover:opacity-95",
+      default: "active:opacity-90",
+    })!,
+  {
+    variants: {
+      variant: {
+        default: "bg-primary",
+        destructive: "bg-destructive",
+        outline: "border border-input bg-background",
+        secondary: "bg-secondary",
+        ghost: "",
+        link: "",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 px-3",
+        lg: "h-11 px-8",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: { variant: "default", size: "default" },
+  }
+);
+
+const buttonTextVariants = cva("font-medium", {
+  variants: {
+    variant: {
+      default: "text-primary-foreground",
+      destructive: "text-destructive-foreground",
+      outline: "text-foreground",
+      secondary: "text-secondary-foreground",
+      ghost: "text-foreground",
+      link: "text-primary underline",
+    },
+    size: {
+      default: "text-base",
+      sm: "text-sm",
+      lg: "text-lg",
+      icon: "text-base",
+    },
+  },
+  defaultVariants: { variant: "default", size: "default" },
+});
+
+type ButtonProps = PressableProps &
+  VariantProps<typeof buttonVariants> & {
+    className?: string;
+  };
+
+export function Button({ className, variant, size, children, ...props }: ButtonProps) {
+  const element = useCssElement(
+    RNPressable,
+    {
+      ...props,
+      className: cn(buttonVariants({ variant, size }), className),
+      children: (
+        <TextClassContext.Provider value={buttonTextVariants({ variant, size })}>
+          {children}
+        </TextClassContext.Provider>
+      ),
+    },
+    { className: "style" }
+  );
+  return element;
+}
+
+export { buttonVariants, buttonTextVariants };
+```
+
+Then create `apps/mobile/components.json` (reusables CLI config so `@react-native-reusables/cli add` works later):
+
+```json
+{
+  "$schema": "https://reactnativereusables.com/schema.json",
+  "style": "default",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "global.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "hooks": "@/hooks"
+  },
+  "iconLibrary": "lucide"
+}
+```
+
+And ensure `<PortalHost />` is rendered in `apps/mobile/app/_layout.tsx` (for dialogs/menus/popovers from reusables).
 
 **Step A4e — install `@expo/ui` for native primitives:**
 
