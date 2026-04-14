@@ -452,18 +452,24 @@ function toHex(value) {
   } catch { return null; }
 }
 
-function generateMobileCSS(lightTokens) {
-  const themeLines = [];
+function buildThemeBlock(tokens) {
+  const lines = [];
   for (const name of MOBILE_TOKEN_NAMES) {
-    const value = lightTokens[name];
+    const value = tokens[name];
     if (!value) continue;
     const hex = toHex(value);
     if (!hex) continue;
-    themeLines.push(`  --color-${name}: ${hex};`);
+    lines.push(`  --color-${name}: ${hex};`);
   }
-  if (!themeLines.find((l) => l.includes("--color-destructive-foreground"))) {
-    themeLines.push(`  --color-destructive-foreground: #ffffff;`);
+  if (!lines.find((l) => l.includes("--color-destructive-foreground"))) {
+    lines.push(`  --color-destructive-foreground: #ffffff;`);
   }
+  return lines.join("\n");
+}
+
+function generateMobileCSS(lightTokens, darkTokens) {
+  const lightBlock = buildThemeBlock(lightTokens);
+  const darkBlock = buildThemeBlock(darkTokens);
   return `/*
  * DO NOT EDIT — generated from packages/ui/src/styles/globals.css.
  * Run \\\`pnpm sync:tokens\\\` from the monorepo root to regenerate.
@@ -481,14 +487,19 @@ function generateMobileCSS(lightTokens) {
 }
 
 @theme {
-${themeLines.join("\n")}
+${lightBlock}
+}
+
+.dark {
+${darkBlock}
 }
 `;
 }
 
 const webCss = readFileSync(WEB_TOKENS, "utf-8");
 const lightTokens = parseTokenBlock(webCss, ":root");
-const mobileCss = generateMobileCSS(lightTokens);
+const darkTokens = parseTokenBlock(webCss, ".dark");
+const mobileCss = generateMobileCSS(lightTokens, darkTokens);
 mkdirSync(dirname(MOBILE_TOKENS), { recursive: true });
 writeFileSync(MOBILE_TOKENS, mobileCss);
 console.log(`wrote ${MOBILE_TOKENS} (${Object.keys(lightTokens).length} tokens)`);
@@ -611,23 +622,124 @@ export default function ExploreScreen() {
 }
 ```
 
-**Create `apps/mobile/app/(tabs)/settings.tsx`** (new file, stub):
+**Create `apps/mobile/lib/theme.tsx`** (theme context with light/dark/system support, manual override via NativeWind's setColorScheme):
 
 ```tsx
-import { ScrollView } from "react-native";
+import * as React from "react";
+import { useColorScheme } from "nativewind";
+
+type ThemeMode = "light" | "dark" | "system";
+
+interface ThemeContextValue {
+  mode: ThemeMode;
+  resolved: "light" | "dark";
+  setMode: (mode: ThemeMode) => void;
+  toggle: () => void;
+}
+
+const ThemeContext = React.createContext<ThemeContextValue | null>(null);
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const { colorScheme, setColorScheme } = useColorScheme();
+  const [mode, setModeState] = React.useState<ThemeMode>("system");
+
+  const resolved: "light" | "dark" = colorScheme === "dark" ? "dark" : "light";
+
+  const setMode = React.useCallback(
+    (next: ThemeMode) => {
+      setModeState(next);
+      setColorScheme(next);
+    },
+    [setColorScheme]
+  );
+
+  const toggle = React.useCallback(() => {
+    setMode(resolved === "dark" ? "light" : "dark");
+  }, [resolved, setMode]);
+
+  const value = React.useMemo(
+    () => ({ mode, resolved, setMode, toggle }),
+    [mode, resolved, setMode, toggle]
+  );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+export function useTheme() {
+  const ctx = React.useContext(ThemeContext);
+  if (!ctx) throw new Error("useTheme must be used inside ThemeProvider");
+  return ctx;
+}
+```
+
+**Wire it into `apps/mobile/app/_layout.tsx`** — wrap the root with `ThemeProvider`, then nest a child component that consumes `useTheme()` so the React Navigation `ThemeProvider` and `StatusBar` style respond to the active mode:
+
+```tsx
+import "@/global.css";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider as NavThemeProvider,
+} from "@react-navigation/native";
+import { PortalHost } from "@rn-primitives/portal";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import "react-native-reanimated";
+
+import { ThemeProvider, useTheme } from "@/lib/theme";
+
+export const unstable_settings = { anchor: "(tabs)" };
+
+function RootStack() {
+  const { resolved } = useTheme();
+  return (
+    <NavThemeProvider value={resolved === "dark" ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
+      </Stack>
+      <StatusBar style={resolved === "dark" ? "light" : "dark"} />
+      <PortalHost />
+    </NavThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootStack />
+    </ThemeProvider>
+  );
+}
+```
+
+**Replace `apps/mobile/app/(tabs)/settings.tsx`** with a real cell that toggles dark mode (uses React Native's built-in `Switch` to avoid an extra reusables CLI install):
+
+```tsx
+import { ScrollView, Switch } from "react-native";
 import { Stack } from "expo-router";
 import { View } from "@/tw";
 import { Text } from "@/components/ui/text";
+import { useTheme } from "@/lib/theme";
 
 export default function SettingsScreen() {
+  const { resolved, toggle } = useTheme();
+  const isDark = resolved === "dark";
+
   return (
     <>
       <Stack.Screen options={{ title: "Settings" }} />
-      <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic">
-        <View className="flex-1 items-center justify-center px-8 py-24">
-          <Text className="text-base text-muted-foreground text-center">
-            Settings tab — replace this with your own content.
-          </Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+      >
+        <View className="px-4 pt-6">
+          <View className="rounded-xl border border-border bg-card overflow-hidden">
+            <View className="flex-row items-center justify-between px-4 py-3">
+              <Text className="text-base text-foreground">Dark mode</Text>
+              <Switch value={isDark} onValueChange={toggle} />
+            </View>
+          </View>
         </View>
       </ScrollView>
     </>
