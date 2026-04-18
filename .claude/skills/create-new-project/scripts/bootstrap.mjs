@@ -42,7 +42,7 @@ const name = args.name;
 const parentRaw = args.parent || resolve(process.env.HOME, "Projects");
 const parent = resolve(parentRaw.replace(/^~/, process.env.HOME));
 const platform = (args.platform || "both").toLowerCase();
-const preset = args.preset || "b2D0wqNxT";
+const preset = args.preset || "b0";
 
 if (!name) {
   console.error("--name is required");

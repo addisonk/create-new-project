@@ -62,10 +62,10 @@ Ask in order (skip a question if the value was already provided in the slash-com
 
 1. **Project name** — e.g. `my-app`
 2. **Platform** — `Both (recommended)` / `Web only` / `Mobile only`
-3. **Preset** — accept a shadcn preset ID, a full `https://ui.shadcn.com/create?preset=...` URL (extract the ID), or press enter for the default (`b2D0wqNxT` — Radix Luma)
+3. **Preset** — accept a shadcn preset ID, a full `https://ui.shadcn.com/create?preset=...` URL (extract the ID), or press enter for the default (`b0`)
 4. **Parent directory** — if `~/Projects/` exists, default to it without asking. Otherwise ask.
 
-If the user's preset input looks truncated or malformed (e.g. a bare `b0`), confirm once via AskUserQuestion before proceeding — don't silently guess.
+If the user's preset input looks malformed (non-alphanumeric, whitespace, etc.), confirm once via AskUserQuestion before proceeding — don't silently guess.
 
 ### Step 2 — Invoke the bootstrap script
 
