@@ -148,6 +148,18 @@ Write `$STYLE` into `apps/design-system/components.json` (the `style` field).
 
 **Manual step — font sync.** Copy font imports, variables, and className setup from `apps/web/app/layout.tsx` into `apps/design-system/app/layout.tsx`. Keep the viewer's `ThemeProvider` and `TooltipProvider` wrapping. Everything else in the viewer (fonts, icons, colors, blocks) is auto-detected — do NOT edit `page.tsx` or `design-system-view.tsx`.
 
+**Stagger design-system's dev start.** Both `web` and `design-system` are Next.js apps and default to port 3000. When turbo starts them in parallel, whichever grabs the socket first wins, and the other gets a non-deterministic fallback port (3002, 3003, etc., depending on what else is running on the user's machine). Pinning explicit ports is **not** the right fix — users often have other projects holding 3000/3001. Instead, give `design-system` a 2-second delay so `web` always claims the lowest free port first and `design-system` takes the next. Patch `apps/design-system/package.json`:
+
+```json
+{
+  "scripts": {
+    "dev": "sleep 2 && next dev --turbopack"
+  }
+}
+```
+
+This keeps auto-port fallback working (so nothing collides with the user's other projects) while making startup order deterministic: web first, design-system second.
+
 ### A4. Scaffold the mobile app
 
 **Important — do NOT use `npx @react-native-reusables/cli@latest init`.** It requires interactive TTY input and hangs when piped, breaking automated runs. Instead, use the `create-expo-app` + manual layering pattern below. After the mobile app is up, you can layer reusables components on top with `npx @react-native-reusables/cli@latest add` (which runs interactively but doesn't hang).
@@ -397,13 +409,30 @@ npx expo install @expo/ui
 
 Follow the `expo-ui-swiftui` and `expo-ui-jetpack-compose` skills for the `Host` / `RNHostView` usage pattern. Note: `@expo/ui` requires a custom dev client — the app cannot run in Expo Go. First run must be `npx expo run:ios` or `npx expo run:android`.
 
-**Step A4f — handle `react-native-svg` if present:**
+**Step A4f — install `lucide-react-native` + `react-native-svg` + `buffer`:**
 
-If the dependency tree pulls in `react-native-svg` (from reusables, lucide-react-native, or any other source), add `buffer` as an explicit dep. Same pnpm strict-hoisting cause as the `connect` workaround.
+The welcome screens in A4g (Browse + Settings) import from `lucide-react-native`, and reusables components that ship icons pull it in too. The reusables bulk-install (A4d.5) does **not** reliably install `lucide-react-native` in the mobile workspace's node_modules under pnpm strict hoisting — Metro then fails with `Unable to resolve "lucide-react-native" from "apps/mobile/app/(tabs)/explore.tsx"` on first bundle. Install it explicitly. `react-native-svg` is lucide's peer and also needs to be hoisted. `buffer` is pulled by the pnpm strict-hoisting fix (same cause as `connect`).
 
 ```bash
 cd {parent}/{name}/apps/mobile
+npx expo install lucide-react-native react-native-svg
 pnpm add buffer
+```
+
+Use `npx expo install` (not raw `pnpm add`) for `lucide-react-native` and `react-native-svg` so Expo pins versions compatible with SDK 55's React Native.
+
+**Step A4f.1 — add `dev` script to mobile's package.json:**
+
+`create-expo-app` scaffolds `start`/`ios`/`android` scripts but not `dev`. Turbo runs `dev` across every package for `pnpm dev`, so mobile needs its own `dev` entry. It must use `--dev-client` (not plain `--ios`) because `@expo/ui` requires the custom dev client — `expo start --ios` alone tries to open the Expo Go URL scheme and fails with `xcrun simctl openurl ... exp://... exited with non-zero code: 60`.
+
+Patch `apps/mobile/package.json` to add:
+
+```json
+{
+  "scripts": {
+    "dev": "expo start --ios --dev-client"
+  }
+}
 ```
 
 **To add more reusables components later** (run interactively from the user's terminal, not piped):
@@ -1177,6 +1206,8 @@ Steps:
 - **react-native-reusables CLI `init` hangs when piped:** Don't use `@react-native-reusables/cli init` in the scaffold flow — it requires interactive TTY input and hangs in automated runs. The A4 steps use `create-expo-app` + manual NativeWind v5 layering instead, which is deterministic. Use `@react-native-reusables/cli add` (also interactive, but doesn't hang) for adding more reusables components after the initial scaffold.
 - **Expo in pnpm monorepo:** the root `pnpm.overrides` + `packageExtensions` + `.npmrc shamefully-hoist=true` are all required. Without all three, resolution fails in different ways.
 - **NativeWind v5 oklch text bug (severity: critical, may already be fixed):** on `nativewind@5.0.0-preview.2` + `react-native-css@nightly`, Tailwind v4's `oklch()` colors broke `<Text>` rendering — text became invisible because RN can't parse oklch. `useCssElement` also overwrote inline `style` props, blocking the workaround. **Fix attempt:** we now pin `nativewind@5.0.0-preview.3` + `react-native-css@^3.0.7`. If text still renders invisible after the first run, the workaround is to import `Text` directly from `react-native` (not from `@/tw`) and use inline style for colors. Watch for this on the first iOS simulator launch.
-- **`@expo/ui` + Expo Go:** incompatible. First run of the mobile app must be `npx expo run:ios` or `expo run:android`, not `expo start`.
+- **`@expo/ui` + Expo Go:** incompatible. First run of the mobile app must be `npx expo run:ios` or `expo run:android`, not `expo start`. Follow-up `pnpm dev` runs must pass `--dev-client` to `expo start` (see Step A4f.1) — otherwise `expo start --ios` tries to open the Expo Go URL scheme and fails with `xcrun simctl openurl ... exited with non-zero code: 60`.
 - **Font sync (web + design-system):** the one manual step in the web flow — easy to forget. Always verify the design-system app compiles after this step.
+- **`lucide-react-native` missing under pnpm strict hoisting:** the reusables bulk-install (A4d.5) pulls lucide transitively but doesn't always land it in `apps/mobile/node_modules` where Metro resolves. First bundle fails with `Unable to resolve "lucide-react-native" from "apps/mobile/app/(tabs)/explore.tsx"`. A4f now installs it explicitly.
 - **`react-native-svg` + `buffer`:** if the dependency tree pulls in `react-native-svg`, also add an explicit `buffer` dep. Same pnpm strict-hoisting cause as the `connect` workaround.
+- **Port 3000 race between web and design-system:** both are Next.js apps defaulting to 3000. Parallel `turbo dev` makes whichever claims the socket first win, leaving the other on a non-deterministic fallback. A3 now adds a 2s `sleep` to design-system's `dev` script so web always starts first. Don't pin explicit ports — users often have other projects holding 3000/3001.
