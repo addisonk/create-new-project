@@ -45,12 +45,17 @@ for (const stale of ["babel.config.js", "tailwind.config.js", "tailwind.config.t
 cpSync(TEMPLATES, mobile, { recursive: true, force: true });
 console.log(`copied templates/mobile/* → apps/mobile/`);
 
-// Patch mobile's package.json scripts (dev needs --dev-client for @expo/ui).
+// Patch mobile's package.json scripts.
+// - `dev` attaches to an already-built custom dev client (--dev-client is
+//   required because @expo/ui isn't Expo Go-compatible).
+// - `dev:build` is the first-run path that compiles the native app and
+//   installs it on the simulator; users run this once before `pnpm dev` works.
 const pkgPath = join(mobile, "package.json");
 if (existsSync(pkgPath)) {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
   pkg.scripts = pkg.scripts || {};
   pkg.scripts.dev = "expo start --ios --dev-client";
+  pkg.scripts["dev:build"] = "expo run:ios";
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
   console.log(`patched mobile package.json (dev = expo start --ios --dev-client)`);
 }

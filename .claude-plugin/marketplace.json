@@ -10,7 +10,7 @@
       "name": "create-new-project",
       "source": "./",
       "description": "One-shot scaffold for a new cross-platform product \u2014 Next.js + shadcn/ui (web), Expo + NativeWind v5 + react-native-reusables + @expo/ui (mobile), plus a design-system viewer, wired into a single pnpm monorepo.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "author": {
         "name": "addisonk",
         "email": "addisonkowalski@gmail.com",

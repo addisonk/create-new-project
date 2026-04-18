@@ -127,11 +127,30 @@ if (platform === "both") {
   // 3. Bulk install ALL reusables components
   runIn(mobile, `yes | npx @react-native-reusables/cli@latest add -a -y -o || true`);
 
-  // 4. Install @expo/ui, lucide-react-native, react-native-svg
-  runIn(mobile, `npx expo install @expo/ui lucide-react-native react-native-svg`);
+  // 4. Install @expo/ui, lucide-react-native, react-native-svg, expo-dev-client.
+  //    expo-dev-client is required for `expo start --dev-client` to work —
+  //    without it, running `pnpm dev` before ever running `expo run:ios`
+  //    fails with "Unable to determine the default URI scheme for deep
+  //    linking into the app".
+  runIn(mobile, `npx expo install @expo/ui lucide-react-native react-native-svg expo-dev-client`);
 
   // 5. Overlay mobile templates (tw, metro.config, welcome screens, etc.)
   runIn(project, `node ${JSON.stringify(join(SCRIPTS, "install-mobile-templates.mjs"))} --root .`);
+
+  // 6. Preset ios.bundleIdentifier + android.package in app.json so
+  //    `expo start --dev-client` doesn't bail before Metro starts. Users can
+  //    rename to their real bundle ID later; `expo run:ios` respects whatever
+  //    is already in app.json.
+  const appJsonPath = join(mobile, "app.json");
+  if (existsSync(appJsonPath)) {
+    const appJson = JSON.parse(readFileSync(appJsonPath, "utf-8"));
+    const slug = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    appJson.expo = appJson.expo || {};
+    appJson.expo.ios = { ...(appJson.expo.ios || {}), bundleIdentifier: `com.${slug}.dev` };
+    appJson.expo.android = { ...(appJson.expo.android || {}), package: `com.${slug}.dev` };
+    writeFileSync(appJsonPath, JSON.stringify(appJson, null, 2) + "\n");
+    console.log(`set ios.bundleIdentifier + android.package to com.${slug}.dev`);
+  }
 }
 
 // ───────────────────────────────────────────────────────────────────────────
