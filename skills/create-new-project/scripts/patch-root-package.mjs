@@ -35,6 +35,11 @@ if (includeMobile) {
   pkg.scripts["sync:tokens"] = "node scripts/sync-mobile-tokens.mjs";
   pkg.scripts["dev:mobile"] = "pnpm sync:tokens && turbo --filter mobile dev";
   pkg.scripts["dev"] = "pnpm sync:tokens && turbo dev";
+
+  // culori powers scripts/sync-mobile-tokens.mjs (oklch → hex). Declaring it
+  // here instead of via `pnpm add -Dw` means it's resolved as part of the
+  // single final install pass, avoiding hoisting-mode mismatches mid-run.
+  pkg.devDependencies = { ...(pkg.devDependencies || {}), culori: "^4.0.2" };
 }
 
 // Pin packageManager to the version the skill was tested on.

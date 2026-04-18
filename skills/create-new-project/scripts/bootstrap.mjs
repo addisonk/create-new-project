@@ -78,14 +78,21 @@ if (platform === "both" || platform === "web") {
     { cwd: parent }
   );
 
-  // 2. Install all shadcn components into packages/ui
+  // 2. Drop the .npmrc immediately so EVERY subsequent pnpm operation runs
+  //    under shamefully-hoist=true. If we wait until after the mobile installs,
+  //    we end up mixing hoisting modes and pnpm trips when later commands
+  //    (e.g. `pnpm add -Dw culori`) try to mutate a tree that was built under
+  //    different rules.
+  cpSync(join(TEMPLATES, "root/.npmrc"), join(project, ".npmrc"));
+
+  // 3. Install all shadcn components into packages/ui
   runIn(project, `pnpm dlx shadcn@latest add --all -c packages/ui`);
 
-  // 3. Clone design-system viewer
+  // 4. Clone design-system viewer
   runIn(project, `gh repo clone addisonk/create-new-project apps/design-system -- --depth 1`);
   rmSync(join(project, "apps/design-system/.git"), { recursive: true, force: true });
 
-  // 4. Patch design-system (style sync + font sync + sleep 2)
+  // 5. Patch design-system (style sync + font sync + sleep 2)
   runIn(project, `node ${JSON.stringify(join(SCRIPTS, "patch-design-system.mjs"))} --root .`);
 }
 
@@ -131,9 +138,10 @@ if (platform === "both") {
 // SHARED PACKAGE + ROOT CONFIG
 // ───────────────────────────────────────────────────────────────────────────
 
-// Root tsconfig.base.json + .npmrc (from templates)
+// Root tsconfig.base.json (the .npmrc was already copied up-front — see
+// "step 2" above — so subsequent pnpm operations all ran under the same
+// hoisting mode).
 cpSync(join(TEMPLATES, "root/tsconfig.base.json"), join(project, "tsconfig.base.json"));
-cpSync(join(TEMPLATES, "root/.npmrc"), join(project, ".npmrc"));
 
 // packages/shared placeholder (both-only)
 if (platform === "both") {
@@ -152,16 +160,15 @@ if (platform === "both") {
   );
 }
 
-// Patch the root package.json (add scripts + pnpm config)
+// Patch the root package.json (add scripts + pnpm config + culori devDep).
+// culori is declared here rather than via a separate `pnpm add -Dw` because
+// running `pnpm add` mid-bootstrap against a partially-installed tree was a
+// reliable source of hoisting mismatches.
 const includeMobile = platform === "both" ? "--include-mobile" : "";
 runIn(project, `node ${JSON.stringify(join(SCRIPTS, "patch-root-package.mjs"))} --root . ${includeMobile}`);
 
-// Install culori as a root devDep so sync:tokens can run
-if (platform === "both") {
-  runIn(project, `pnpm add -Dw culori`);
-}
-
-// Full install with overrides
+// Full install with overrides — this resolves culori (and every other dep)
+// under the shamefully-hoist .npmrc already in place.
 runIn(project, `CI=true pnpm install --no-frozen-lockfile`);
 
 // Generate mobile/global.css (both only)
