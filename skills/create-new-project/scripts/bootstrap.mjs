@@ -196,6 +196,28 @@ if (platform === "both") {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// BUILD THE iOS DEV CLIENT (mobile paths)
+// ───────────────────────────────────────────────────────────────────────────
+// @expo/ui requires a custom dev client — Expo Go won't do. Running
+// `expo run:ios` here compiles the native project, installs it on a booted
+// simulator, and leaves it ready for `pnpm dev` to attach Metro to later.
+// `--no-bundler` prevents run:ios from starting its own Metro (we don't want
+// a persistent foreground process mid-bootstrap; the user's `pnpm dev` will
+// start Metro fresh).
+if (platform === "both") {
+  console.log("\n" + "═".repeat(72));
+  console.log("  Building iOS dev client — this takes ~15 min, grab coffee ☕");
+  console.log("═".repeat(72));
+  try {
+    runIn(join(project, "apps/mobile"), `npx expo run:ios --no-bundler`);
+  } catch (err) {
+    console.warn("\n⚠  iOS dev client build failed. You can retry with:");
+    console.warn(`     cd ${project}/apps/mobile && npx expo run:ios`);
+    console.warn("   The rest of the scaffold is fine — web + design-system work already.");
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // GIT
 // ───────────────────────────────────────────────────────────────────────────
 if (!existsSync(join(project, ".git"))) {

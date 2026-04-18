@@ -59,14 +59,13 @@ The skill asks:
 2. **Platform** — `Both` (web + mobile monorepo, recommended), `Web only`, `Mobile only`
 3. **Preset** — shadcn preset ID or full `https://ui.shadcn.com/create?preset=...` URL. Default: `b0`.
 
-The scaffold runs in one pass. First mobile run needs a custom dev client build (because `@expo/ui` isn't Expo Go-compatible):
+The scaffold runs in one pass, including the ~15 min iOS dev client build at the end (required because `@expo/ui` isn't Expo Go-compatible). When it finishes, `pnpm dev` from the repo root starts web + mobile + design-system together and everything just works — no second manual step.
+
+If the dev client build fails for any reason (simulator not available, SDK mismatch, etc.), the rest of the scaffold is still valid — rerun:
 
 ```bash
-cd {name}/apps/mobile
-npx expo run:ios
+cd {name}/apps/mobile && npx expo run:ios
 ```
-
-After that, `pnpm dev` from the repo root starts web + mobile + design-system together.
 
 ## Updating
 
