@@ -1,57 +1,80 @@
-# create-new-project
+# Create New Project
 
-A Claude Code skill that scaffolds new cross-platform products — marketing site + iOS/Android app + shared design system — in a single command. Built on `shadcn/ui` for web, `react-native-reusables` + NativeWind v5 + `@expo/ui` for mobile, and a `pnpm` + Turborepo monorepo when you need both.
+A Claude Code plugin that scaffolds a full cross-platform product in one shot — Next.js + shadcn/ui on the web side, Expo + NativeWind v5 + react-native-reusables + `@expo/ui` on the mobile side, and a design-system viewer — all wired into a single pnpm monorepo.
 
-## Usage
+Invoke with `/create-new-project` and answer three questions: project name, platforms, shadcn preset. Everything else is deterministic.
 
-Clone this repo and open it in Claude Code:
+## Philosophy
+
+**Scripts execute, the LLM orchestrates.**
+
+Scaffolding is a deterministic task. When an LLM has to faithfully reproduce config files, JSON merges, and component code on every run, drift creeps in — wrong paths, dropped function arguments, lost `package.json` scripts. This plugin narrows the LLM's job to three things:
+
+1. Check the environment (adapts to the user's machine).
+2. Collect inputs through interactive prompts.
+3. Invoke one shell script that does everything else.
+
+Every file that gets written is a template vendored in this repo. Every transform (package.json merges, font sync, token sync, style sync) is a Node script. No freehand regeneration, no "manually copy these fields," no "carefully reproduce this file."
+
+## Install
+
+### Claude Code
 
 ```bash
-gh repo clone addisonk/create-new-project
-cd create-new-project
-claude
+/plugin marketplace add addisonk/create-new-project
+/plugin install create-new-project@create-new-project
 ```
 
-Tell Claude: **"create a new project"**.
+Then invoke with:
 
-Claude will ask (via interactive prompts):
+```
+/create-new-project
+```
 
-1. Project name
-2. Platforms — **Both** (web + mobile monorepo, default), **Web only**, or **Mobile only**
-3. shadcn preset (for web)
+### System requirements
 
-It then scaffolds everything into `~/Projects/{name}/` and reports next steps.
-
-## System requirements
-
-The skill runs a preflight check before scaffolding and will stop if anything's missing. Required:
+Checked automatically via preflight — the plugin stops and tells you what to fix if anything's missing.
 
 **Universal:**
 - **Node 20+** — `node -v`
 - **pnpm 10** — `corepack enable && corepack prepare pnpm@10 --activate`
-- **gh CLI** — `brew install gh` (used to clone the design-system viewer)
-- **git** — usually present; `xcode-select --install` if not
+- **gh CLI** — `brew install gh` (clones the design-system viewer)
+- **git**
 
-**Mobile (Both or Mobile-only paths):**
-- **Xcode** — install from the Mac App Store, then run `sudo xcode-select --install`
-- **iOS simulator runtime matching your Xcode version.** This is critical: if your Xcode is 26.4, you need an `iOS 26.x` simulator runtime — having only an older runtime (e.g. iOS 18.6) is *not* enough. Xcode requires a matching iOS SDK to compile, even when targeting older simulators.
-  - **Install from CLI (no Xcode UI needed):** `xcodebuild -downloadPlatform iOS` — about 8 GB, takes 15–20 min
-  - Or via Xcode → Settings → Platforms → `+` → iOS
+**Mobile paths (Both / Mobile only):**
+- **Xcode** — from the Mac App Store, then `sudo xcode-select --install`
+- **iOS simulator runtime matching your Xcode version exactly.** Xcode `26.4` requires iOS `26.4` simulator — having only an older runtime like iOS `18.6` is not enough. Xcode needs a matching SDK to compile.
+  - CLI install: `xcodebuild -downloadPlatform iOS` (~8 GB, 15–20 min)
+  - Or: Xcode → Settings → Platforms → `+` → iOS
 
-If you skip this, the scaffold still finishes, but `npx expo run:ios` will fail at the very last step with `xcodebuild: error: Unable to find a destination`. The skill's preflight check catches this before scaffolding starts.
+## Usage
 
-## Prerequisite skills
+```
+/create-new-project
+```
 
-The mobile path treats these Claude skills as source of truth. Install them before running the scaffold on a mobile or "both" path, or the mobile quality drops:
+The skill asks:
 
-- `expo-tailwind-setup` — NativeWind v5 + Tailwind v4 CSS-first recipe
-- `react-native-reusables` — shadcn-philosophy components for React Native
-- `expo-ui-swiftui` — `@expo/ui` SwiftUI primitives (iOS)
-- `expo-ui-jetpack-compose` — `@expo/ui` Jetpack Compose primitives (Android)
-- `building-native-ui` — Expo Router conventions
-- `native-data-fetching` — network/data-fetching defaults
+1. **Project name** — e.g. `my-app`
+2. **Platform** — `Both` (web + mobile monorepo, recommended), `Web only`, `Mobile only`
+3. **Preset** — shadcn preset ID or full `https://ui.shadcn.com/create?preset=...` URL. Default: `b0`.
 
-Web-only path has no extra prerequisites.
+The scaffold runs in one pass. First mobile run needs a custom dev client build (because `@expo/ui` isn't Expo Go-compatible):
+
+```bash
+cd {name}/apps/mobile
+npx expo run:ios
+```
+
+After that, `pnpm dev` from the repo root starts web + mobile + design-system together.
+
+## Updating
+
+```
+/plugin marketplace update create-new-project
+```
+
+Updates only trigger when the `version` field bumps in `.claude-plugin/plugin.json` — commits alone don't trigger them. Check [releases](https://github.com/addisonk/create-new-project/releases) for what's in each version.
 
 ## What you get
 
@@ -60,84 +83,67 @@ Web-only path has no extra prerequisites.
 ```
 {name}/
 ├── apps/
-│   ├── web/              # Next.js 16 + shadcn/ui (marketing site + web app)
-│   ├── mobile/           # Expo SDK 55 + Expo Router + NativeWind v5 + reusables + @expo/ui
-│   └── design-system/    # Web-only design system viewer
+│   ├── web/              # Next.js 16 + shadcn/ui + Turbopack
+│   ├── mobile/           # Expo SDK 55 + NativeWind v5 + reusables + @expo/ui
+│   └── design-system/    # Theme tinker, block explorer, color/font editors
+│                         # (saves changes back to packages/ui globals.css)
 ├── packages/
-│   ├── ui/               # shadcn components (web)
-│   └── shared/           # Empty placeholder for cross-platform types / API clients / utils
+│   ├── ui/               # 55+ shadcn components (web)
+│   ├── shared/           # Cross-platform types / utilities
+│   ├── eslint-config/
+│   └── typescript-config/
+├── scripts/sync-mobile-tokens.mjs  ← web oklch → mobile hex
 ├── turbo.json
 ├── pnpm-workspace.yaml
-└── package.json          # with pnpm overrides for Expo-in-monorepo
+├── .npmrc                # shamefully-hoist=true for Expo
+└── package.json          # pnpm overrides + packageExtensions
 ```
 
 Run:
 
-- `pnpm dev:web` — marketing site / web app
-- `cd apps/mobile && npx expo run:ios` — first run (custom dev client required because `@expo/ui`)
-- `pnpm dev:mobile` — after the first run
-- `pnpm dev:design-system` — design system viewer
+- `pnpm dev` — all three apps in parallel (web + mobile + design-system)
+- `pnpm dev:web` — web only
+- `pnpm dev:design-system` — design-system only
+- `cd apps/mobile && npx expo run:ios` — first-time mobile build (required)
+- `pnpm dev:mobile` — after first run
 
 ### Web only
 
-```
-{name}/
-├── apps/
-│   ├── web/              # Next.js 16 + shadcn/ui
-│   └── design-system/    # Design system viewer
-├── packages/
-│   └── ui/               # shadcn components
-├── turbo.json
-└── pnpm-workspace.yaml
-```
-
-Run:
-
-- `pnpm dev` — main app
-- `pnpm --filter design-system dev` — viewer
+Next.js + shadcn monorepo with the design-system viewer, no mobile. `pnpm dev` for the main app, `pnpm dev:design-system` for the viewer.
 
 ### Mobile only
 
-Standalone Expo app at `{name}/` with Expo Router, NativeWind v5, reusables components, and `@expo/ui`. No monorepo.
+Standalone Expo app with Expo Router, NativeWind v5, reusables, and `@expo/ui`. No monorepo. `npx expo run:ios` first, then `pnpm dev`.
 
-Run:
+## Mobile starter screens
 
-- `npx expo run:ios` — first run (custom dev client required)
-- `pnpm dev` — after the first run
+The mobile app ships with a three-tab starter that demonstrates both halves of the stack:
 
-## Design system viewer
+- **Home** — pure `@expo/ui` SwiftUI primitives. SF Symbol grid, system fonts, liquid-glass-ready. Demonstrates the fully-native escape hatch.
+- **Browse** — Cards + lucide icons using NativeWind + reusables. Demonstrates the cross-platform path (covers ~90% of screens).
+- **Settings** — iOS-style grouped rows with Avatar, Badge, Separator.
 
-Lives at `apps/design-system/` in the monorepo (or at the root of this repo — it's the same Next.js app).
+OS-driven dark mode via `useColorScheme()`. NativeTabs for iOS 26+ liquid glass on iOS, Material 3 bottom nav on Android.
 
-It visualizes your shadcn monorepo's design system: typography, colors, radius, and component blocks. Read-only, always-in-sync, for the web side.
+## Design-system viewer
 
-### What it shows
+Lives at `apps/design-system/` in the scaffolded project. It visualizes your shadcn monorepo's design system and lets you edit themes live — changes save back to `packages/ui/src/styles/globals.css`.
 
-- **Typography** — font name, Aa specimen, weights, character overview for each font (Body, Heading, Mono)
+**What it shows**
+- **Typography** — font name, Aa specimen, weights, character overview per font
 - **Color Palette** — primary grid with foreground labels, utility colors with WCAG auto-contrast, charts, sidebar
 - **Radius** — visual scale from none to 4xl, resolved from theme
-- **Blocks** — shadcn preview 01/02 masonry grid with a toggle, scrollable container
+- **Blocks** — shadcn preview 01 / 02 masonry grid
 
-### Features
+**Features**
+- **Press D** — toggle dark mode
+- Click-to-edit color pickers with a sticky save bar
+- Inline font editing via Command palette (Figma-style hover hints)
+- **Section filter** — `?section=color` URL param
+- **Auto-contrast** — WCAG contrast with alpha compositing
+- **Dynamic icons** — reads `iconLibrary` from `components.json`
 
-- **Press D** — toggle dark mode (next-themes)
-- **Section filter** — `?section=color` URL param to view one section
-- **Auto-contrast** — colorjs.io WCAG contrast with alpha compositing, readable labels on any color
-- **Dynamic icons** — reads `iconLibrary` from `components.json`, imports the right package via React context
-
-### One manual step: sync layout fonts
-
-The skill handles this for you, but if you set up the viewer manually, copy the font imports from `apps/web/app/layout.tsx` into `apps/design-system/app/layout.tsx`. The fonts must match because `next/font` requires static imports.
-
-Everything else is auto-detected:
-
-- **Font names and labels** — parsed from `apps/web/app/layout.tsx` at build time
-- **Icon library** — read from `packages/ui/components.json`, dynamically imported
-- **Style** — read from `packages/ui/components.json`
-- **Colors, radius** — from CSS theme variables
-- **Blocks** — shadcn preview cards using `@workspace/ui` components
-
-### Manual install (outside the skill)
+**Manual install (outside the plugin)**
 
 ```bash
 gh repo clone addisonk/create-new-project apps/design-system -- --depth 1
@@ -146,31 +152,67 @@ pnpm install
 pnpm --filter design-system dev
 ```
 
-### Viewer dependencies
+## Sharp edges
 
-- `next`
-- `@workspace/ui`
-- `next-themes`
-- `recharts` (v3)
-- `colorjs.io`
-- `shadcn`
-- `react-qr-code`
-- `lucide-react` (default; swapped at runtime if `components.json` specifies another icon library)
+The scaffold handles these automatically — worth knowing so you don't wonder why things are the way they are:
 
-### Viewer file structure
+- **Expo in pnpm monorepo** — the root `pnpm.overrides` + `packageExtensions` + `.npmrc shamefully-hoist=true` are all required. Without all three, mobile resolution fails.
+- **`@expo/ui` + Expo Go** — incompatible. First mobile run must be `npx expo run:ios`. Afterwards, mobile's `dev` script uses `expo start --ios --dev-client` — without `--dev-client` it tries to open the Expo Go URL scheme and fails with `xcrun simctl openurl ... exited with non-zero code: 60`.
+- **Port 3000 race** — web and design-system both default to port 3000. Scaffold adds a 2s `sleep` to design-system's dev script so web always claims the lowest free port first. Auto-fallback preserved so nothing collides with other projects on your machine.
+- **`lucide-react-native` under pnpm strict hoisting** — the reusables CLI doesn't always hoist it into `apps/mobile/node_modules`. Scaffold installs it explicitly.
+- **Xcode ↔ iOS SDK exact-version match** — preflight enforces `major.minor` match (not just `major.*`), because `xcodebuild` fails with `Unable to find a destination` otherwise.
+
+## Local development
+
+For editing this plugin and testing changes immediately:
+
+```bash
+# one-time setup
+git clone git@github.com:addisonk/create-new-project.git ~/Projects/create-new-project
+ln -s ~/Projects/create-new-project/skills/create-new-project ~/.claude/skills/create-new-project
+```
+
+The symlink means edits under `skills/create-new-project/` are picked up immediately by Claude Code — no reinstall needed.
+
+Repo layout:
 
 ```
-app/
-  page.tsx              — server component, reads config, renders DesignSystemView
-  layout.tsx            — fonts + ThemeProvider (must match apps/web)
-  tokens/               — color-block and font-block components
-components/
-  design-system-view.tsx — main client component with all sections
-  icon-context.tsx       — dynamic icon library provider
-  theme-provider.tsx     — next-themes wrapper with D hotkey
-  blocks/
-    preview/             — shadcn preview 01 cards
-    preview-02/          — shadcn preview 02 cards
-lib/
-  config.ts             — reads components.json + parses layout.tsx for fonts
+.
+├── .claude-plugin/
+│   ├── plugin.json          ← plugin manifest (bump version to ship updates)
+│   └── marketplace.json     ← self-hosted marketplace catalog
+└── skills/create-new-project/
+    ├── SKILL.md             ← thin orchestration layer
+    ├── scripts/
+    │   ├── bootstrap.mjs                ← main orchestrator
+    │   ├── patch-root-package.mjs       ← merges pnpm overrides
+    │   ├── patch-design-system.mjs      ← style + font sync, stagger dev
+    │   ├── install-mobile-templates.mjs ← overlays mobile templates
+    │   └── sync-mobile-tokens.mjs       ← oklch → hex for RN
+    └── templates/
+        ├── root/            ← .npmrc, tsconfig.base.json
+        ├── shared/          ← packages/shared placeholder
+        └── mobile/          ← postcss, metro, tsconfig, tw/, welcome screens
 ```
+
+### Shipping an update
+
+1. Make changes under `skills/create-new-project/`.
+2. Test locally (symlink means no reinstall).
+3. Bump `version` in **both** `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+4. Commit and push. Users get it on their next `/plugin marketplace update`.
+
+## Prerequisite skills
+
+The mobile path treats these Claude skills as source of truth. If you're on the Both or Mobile path and haven't installed them, quality drops:
+
+- [`expo-tailwind-setup`](https://github.com/addisonk/ak-skills) — NativeWind v5 + Tailwind v4 CSS-first recipe
+- [`react-native-reusables`](https://github.com/addisonk/ak-skills) — shadcn-philosophy components for React Native
+- [`expo-ui-swiftui`](https://github.com/addisonk/ak-skills) — `@expo/ui` SwiftUI primitives (iOS)
+- [`expo-ui-jetpack-compose`](https://github.com/addisonk/ak-skills) — `@expo/ui` Jetpack Compose primitives (Android)
+- [`building-native-ui`](https://github.com/addisonk/ak-skills) — Expo Router conventions
+- [`native-data-fetching`](https://github.com/addisonk/ak-skills) — network / data-fetching defaults
+
+## License
+
+MIT
