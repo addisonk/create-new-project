@@ -1,1213 +1,146 @@
+---
+name: create-new-project
+description: One-shot scaffold for a new cross-platform product — Next.js + shadcn/ui (web) and/or Expo + NativeWind v5 + react-native-reusables + @expo/ui (mobile), wired into a single pnpm monorepo. The LLM orchestrates questions and environment checks; everything file-level is vendored as templates + scripts so runs are deterministic.
+---
+
 # Create New Project
 
-One-shot scaffold for a new cross-platform product: Next.js + shadcn/ui (web) and/or Expo + NativeWind v5 + react-native-reusables + `@expo/ui` (iOS/Android), wired into a single pnpm monorepo when both are requested.
+Scaffold a Next.js + shadcn monorepo, an Expo mobile app, and a design-system viewer — together or individually — with one shell command.
 
 ## When to Use
 
-Use when the user wants to start a new project — a marketing site, a mobile app, or both. Default is "both" (the primary use case).
+Use when the user wants to start a new project — a marketing site, a mobile app, or both. Default is **both** (the primary use case).
+
+## Design principle — LLM orchestrates, scripts execute
+
+Every deterministic file write is in `templates/` and every deterministic transform is in `scripts/`. The LLM's job is narrow:
+
+1. Run preflight checks (diagnostic, adapts to user's environment).
+2. Ask the user 3 questions (project name, platform, preset).
+3. Invoke `scripts/bootstrap.mjs` with the answers.
+4. Report next steps.
+
+Do NOT copy template content into prose and ask the model to reproduce it — that reintroduces drift. If a new template file is needed, add it under `templates/` and extend `bootstrap.mjs`.
 
 ## Interaction Method
 
-**IMPORTANT:** Always use the `AskUserQuestion` tool for gathering input. Do NOT print questions as plain text — use the tool so the user gets a proper interactive prompt. Ask one question at a time.
+**IMPORTANT:** Gather all inputs via the `AskUserQuestion` tool. Do NOT print questions as plain text — use the tool so the user gets a proper interactive prompt. One question at a time.
 
-## Prerequisite skills (mobile path)
+## Prerequisite skills
 
-The mobile path treats these skills as source of truth for the detailed setup. Read them and follow them when running mobile steps:
+Not required to run, but worth reading for context on what the mobile templates assume:
 
-- `expo-tailwind-setup` — NativeWind v5 + Tailwind v4 CSS-first recipe (exact install command, metro config flags, `tw/` wrapper pattern, no babel.config.js)
-- `react-native-reusables` — shadcn-philosophy component library for React Native (`@rn-primitives/*`, CVA variants, TextClassContext)
-- `expo-ui-swiftui` — `@expo/ui/swift-ui` primitives for iOS (Host, RNHostView, SwiftUI mirror API)
-- `expo-ui-jetpack-compose` — `@expo/ui/jetpack-compose` primitives for Android (Host, LazyColumn, modifiers)
-- `building-native-ui` — Expo Router conventions, route structure, tabs, file naming
-- `native-data-fetching` — Default preference: `expo/fetch` over axios
-
-If any of these skills are not installed, tell the user which ones are missing and offer to proceed with general knowledge (mobile quality will be lower). Do NOT silently fall back.
+- `expo-tailwind-setup` — NativeWind v5 + Tailwind v4 CSS-first recipe
+- `react-native-reusables` — shadcn-philosophy components for React Native
+- `expo-ui-swiftui` / `expo-ui-jetpack-compose` — native primitives
+- `building-native-ui` — Expo Router conventions
+- `native-data-fetching` — use `expo/fetch` over axios
 
 ## Steps
 
 ### Step 0 — Preflight check
 
-**Run this BEFORE asking any questions.** Catches missing system dependencies in 5 seconds instead of letting the user discover them 10 minutes later when `xcodebuild` fails.
-
-Run these checks and collect failures into a single report:
+Run these checks in parallel and collect failures into a single report. Don't proceed to Step 1 until everything passes.
 
 **Universal (all paths):**
-- `command -v pnpm` — if missing: "Install pnpm: `corepack enable && corepack prepare pnpm@10 --activate`"
-- `pnpm --version` — should be 10.x; if older: same fix as above
-- `command -v gh` — if missing: "Install gh CLI: `brew install gh`" (needed to clone the design-system viewer)
-- `node -v` — should be 20+; if older: "Upgrade Node to 20+ via `brew install node@20` or nvm"
-- `command -v git` — if missing: "Install git: `xcode-select --install` or `brew install git`"
+- `command -v pnpm && pnpm --version` — need pnpm 10.x. Fix: `corepack enable && corepack prepare pnpm@10 --activate`
+- `command -v gh` — needed to clone the design-system viewer. Fix: `brew install gh`
+- `node -v` — Node 20+. Fix: `brew install node@20` or nvm
+- `command -v git` — Fix: `xcode-select --install`
 
-**Mobile (Both or Mobile-only paths only):**
-- `xcode-select -p` — should print a path. If it errors or returns "no developer tools": "Install Xcode from the Mac App Store, then run `sudo xcode-select --install`"
-- `xcodebuild -version` — should print something like `Xcode 26.4`. Extract **both major and minor** (e.g. `26.4`).
-- `xcrun simctl list runtimes -j 2>/dev/null` — parse JSON; the `runtimes` array must contain at least one entry whose `version` field matches Xcode's **exact major.minor** (e.g. Xcode `26.4` → require iOS `26.4`). Matching only the major (e.g. accepting `iOS 26.2` for Xcode `26.4`) is NOT enough — Xcode needs the SDK that ships with its exact point release, and `xcodebuild` will fail with `Unable to find a destination` even though the simulator list looks populated.
-  - If no exact match: "Your Xcode is `{xcode_version}` but no `iOS {xcode_major}.{xcode_minor}` simulator runtime is installed (closest installed: `{closest_installed}`). Xcode requires the SDK from its own point release — a near-miss like `iOS 26.2` for Xcode `26.4` will still fail `xcodebuild` with `Unable to find a destination`. Install it from the CLI (no Xcode UI needed): `xcodebuild -downloadPlatform iOS` — note: this is ~8 GB and takes 15–20 minutes. Re-run the skill once it's done."
-  - Do NOT match on major version alone — that's the bug we hit twice (2026-04-13 first pass: "any iOS runtime"; second pass: "any iOS 26.x runtime"). Match on **major.minor**.
-- `xcrun simctl list devices available -j 2>/dev/null` — at least one device must exist whose runtime matches Xcode's exact major.minor. Same fix if not.
+**Mobile (both / mobile paths):**
+- `xcode-select -p` — must print a path. Fix: install Xcode from the App Store, then `sudo xcode-select --install`.
+- `xcodebuild -version` — extract Xcode's **major.minor** (e.g. `26.4`).
+- `xcrun simctl list runtimes -j` — parse JSON; require a runtime whose `version` matches Xcode's **exact major.minor**. Near-misses fail `xcodebuild` later with `Unable to find a destination`. Fix: `xcodebuild -downloadPlatform iOS` (~8 GB, 15–20 min).
+- `xcrun simctl list devices available -j` — require at least one device on the matching runtime.
 
-**If ANY check fails:**
-- STOP. Do not proceed to Step 1.
-- Report ALL failures in a single block (not one at a time)
-- For each failure, give the exact command to fix it
-- Tell the user to run the skill again once fixed
-- Do NOT start scaffolding with a known-broken environment
+If ANY check fails: stop, report ALL failures in a single block, give each fix command, tell the user to re-run the skill once fixed. Don't start scaffolding with a known-broken environment.
 
-**If everything passes:** silently continue to Step 1. (Don't make the user wait through a "✓ all checks passed" wall of text — just move on.)
+### Step 1 — Collect inputs via AskUserQuestion
 
-### Step 1 — Project name
+Ask in order (skip a question if the value was already provided in the slash-command args):
 
-Use `AskUserQuestion` (skip if provided as an argument):
-- Q: "What should the project be called?"
+1. **Project name** — e.g. `my-app`
+2. **Platform** — `Both (recommended)` / `Web only` / `Mobile only`
+3. **Preset** — accept a shadcn preset ID, a full `https://ui.shadcn.com/create?preset=...` URL (extract the ID), or press enter for the default (`b2D0wqNxT` — Radix Luma)
+4. **Parent directory** — if `~/Projects/` exists, default to it without asking. Otherwise ask.
 
-### Step 2 — Platform
+If the user's preset input looks truncated or malformed (e.g. a bare `b0`), confirm once via AskUserQuestion before proceeding — don't silently guess.
 
-Use `AskUserQuestion`:
-- Q: "What platforms do you need?"
-- Options:
-  - **Both** — "Web + iOS/Android monorepo (recommended): Next.js marketing/web app + Expo mobile app + design system viewer, all in one pnpm monorepo."
-  - **Web only** — "Next.js + shadcn/ui monorepo (web only)."
-  - **Mobile only** — "Standalone Expo app with react-native-reusables (no monorepo)."
+### Step 2 — Invoke the bootstrap script
 
-### Step 3 — shadcn preset (skip for "Mobile only")
-
-Use `AskUserQuestion`:
-- Q: "Do you want to use a shadcn preset? Enter a preset ID or URL, or press enter for the default (b2D0wqNxT — Radix Luma)."
-- If a URL like `https://ui.shadcn.com/create?preset=b2D0wqNxT`, extract just the preset ID.
-- If empty / "no" / "default", use `b2D0wqNxT`.
-
-### Step 4 — Parent directory
-
-- If `~/Projects/` exists, use it (no question).
-- If not, use `AskUserQuestion`: "Where do you keep your projects? (e.g., ~/Code, ~/dev, ~/workspace)"
-
-### Step 5 — Branch on platform
-
-Jump to the matching path below.
-
----
-
-## Path A — Both (web + mobile monorepo)
-
-Produces:
-
-```
-{name}/
-├── apps/
-│   ├── web/              # Next.js 16 + shadcn/ui
-│   ├── mobile/           # Expo SDK 55 + NativeWind v5 + reusables + @expo/ui
-│   └── design-system/    # Web-only viewer (cloned from create-new-project)
-├── packages/
-│   ├── ui/               # shadcn components (web)
-│   └── shared/           # Empty placeholder for cross-platform types/utils
-├── turbo.json
-├── pnpm-workspace.yaml
-└── package.json          # with pnpm overrides for Expo-in-monorepo
-```
-
-### A1. Scaffold the web monorepo (shadcn)
+Run:
 
 ```bash
-cd {parent}
-echo "{name}" | pnpm dlx shadcn@latest init --preset {preset-id} --template next --monorepo
+node "$SKILL_DIR/scripts/bootstrap.mjs" \
+  --name "<name>" \
+  --parent "<parent>" \
+  --platform both|web|mobile \
+  --preset "<preset-id>"
 ```
 
-Notes:
-- `--monorepo` is a boolean flag — do NOT pass a project name after it
-- shadcn creates the project folder itself
-- Pipe the name via `echo` because the CLI prompts interactively
-- Use a 5-minute timeout
-
-Creates `{parent}/{name}/` with `apps/web/`, `packages/ui/`, `turbo.json`, `pnpm-workspace.yaml`.
-
-### A2. Install all shadcn components
-
-```bash
-cd {parent}/{name}
-pnpm dlx shadcn@latest add --all -c packages/ui
-```
-
-`-c packages/ui` is required in monorepo mode. 5-minute timeout.
-
-### A3. Add the design-system viewer
-
-```bash
-cd {parent}/{name}
-gh repo clone addisonk/create-new-project apps/design-system -- --depth 1
-rm -rf apps/design-system/.git
-```
-
-Update the viewer's style to match:
-
-```bash
-cd {parent}/{name}
-STYLE=$(cat packages/ui/components.json | python3 -c "import sys,json; print(json.load(sys.stdin)['style'])")
-```
-
-Write `$STYLE` into `apps/design-system/components.json` (the `style` field).
-
-**Manual step — font sync.** Copy font imports, variables, and className setup from `apps/web/app/layout.tsx` into `apps/design-system/app/layout.tsx`. Keep the viewer's `ThemeProvider` and `TooltipProvider` wrapping. Everything else in the viewer (fonts, icons, colors, blocks) is auto-detected — do NOT edit `page.tsx` or `design-system-view.tsx`.
-
-**Stagger design-system's dev start.** Both `web` and `design-system` are Next.js apps and default to port 3000. When turbo starts them in parallel, whichever grabs the socket first wins, and the other gets a non-deterministic fallback port (3002, 3003, etc., depending on what else is running on the user's machine). Pinning explicit ports is **not** the right fix — users often have other projects holding 3000/3001. Instead, give `design-system` a 2-second delay so `web` always claims the lowest free port first and `design-system` takes the next. Patch `apps/design-system/package.json`:
-
-```json
-{
-  "scripts": {
-    "dev": "sleep 2 && next dev --turbopack"
-  }
-}
-```
-
-This keeps auto-port fallback working (so nothing collides with the user's other projects) while making startup order deterministic: web first, design-system second.
-
-### A4. Scaffold the mobile app
-
-**Important — do NOT use `npx @react-native-reusables/cli@latest init`.** It requires interactive TTY input and hangs when piped, breaking automated runs. Instead, use the `create-expo-app` + manual layering pattern below. After the mobile app is up, you can layer reusables components on top with `npx @react-native-reusables/cli@latest add` (which runs interactively but doesn't hang).
-
-The mobile app lives at `{parent}/{name}/apps/mobile/`.
-
-**Step A4a — scaffold the Expo app:**
-
-```bash
-cd {parent}/{name}/apps
-npx create-expo-app@latest mobile --template default
-```
-
-This creates `apps/mobile/` with Expo Router, the default tabs template, and TypeScript.
-
-**Step A4b — pin SDK 55 and align packages:**
-
-```bash
-cd {parent}/{name}/apps/mobile
-npx expo install expo@~55.0.0
-npx expo install --fix
-```
-
-`create-expo-app`'s default template may lag behind the latest stable Expo SDK — these two commands ensure SDK 55 is installed and all peer packages (react-native, react-native-reanimated, etc.) align with what SDK 55 expects.
-
-**Step A4c — install NativeWind v5 + Tailwind v4 + dependencies:**
-
-Follow the **`expo-tailwind-setup` skill** for the canonical recipe. Specifically:
-
-```bash
-cd {parent}/{name}/apps/mobile
-npx expo install tailwindcss@^4 nativewind@5.0.0-preview.3 \
-  react-native-css@^3.0.7 @tailwindcss/postcss tailwind-merge clsx
-pnpm add connect           # explicit dep — react-native-css-interop needs it at runtime
-```
-
-Then:
-- Delete any `babel.config.js` and `tailwind.config.js` that `create-expo-app` may have created (NativeWind v5 is CSS-first, no babel preset required)
-- Create `apps/mobile/postcss.config.mjs` → `{ plugins: { "@tailwindcss/postcss": {} } }`
-- **Skip writing `apps/mobile/global.css` here** — Step A4f.5 generates it from web's tokens via the sync script. Just make sure `apps/mobile/app/_layout.tsx` imports `"@/global.css"`.
-- Create `apps/mobile/tw/index.tsx` with CSS-enabled wrappers using `useCssElement` from react-native-css. **CRITICAL: the third argument to `useCssElement` is required.** It maps the className prop to a style prop on the underlying component. Without it, you get "Cannot convert undefined value to object" at render time. The signature is `useCssElement(Component, props, { className: "style" })`. ScrollView additionally needs `contentContainerClassName: "contentContainerStyle"`. Use exactly this template:
-
-  ```tsx
-  import { useCssElement } from "react-native-css";
-  import {
-    View as RNView, Text as RNText, Pressable as RNPressable, ScrollView as RNScrollView,
-    type ViewProps, type TextProps, type PressableProps, type ScrollViewProps,
-  } from "react-native";
-  import { Link as ExpoLink, type LinkProps as ExpoLinkProps } from "expo-router";
-
-  export const View = (props: ViewProps & { className?: string }) =>
-    useCssElement(RNView, props, { className: "style" });
-
-  export const Text = (props: TextProps & { className?: string }) =>
-    useCssElement(RNText, props, { className: "style" });
-
-  export const Pressable = (props: PressableProps & { className?: string }) =>
-    useCssElement(RNPressable, props, { className: "style" });
-
-  export const ScrollView = (
-    props: ScrollViewProps & { className?: string; contentContainerClassName?: string }
-  ) =>
-    useCssElement(RNScrollView, props, {
-      className: "style",
-      contentContainerClassName: "contentContainerStyle",
-    });
-
-  export const Link = (props: ExpoLinkProps & { className?: string }) =>
-    useCssElement(ExpoLink as never, props, { className: "style" });
-  ```
-- Import `./global.css` from `apps/mobile/app/_layout.tsx`
-
-**Step A4d — add reusables foundation files:**
-
-Follow the **`react-native-reusables` skill** for the philosophy and component conventions, but use the EXACT templates below for the foundation files. Claude has a strong tendency to drop the third argument to `useCssElement` when generating these freehand, which causes "Cannot convert undefined value to object" at render time. The third argument is **required**.
-
-`apps/mobile/lib/utils.ts`:
-
-```ts
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-```
-
-`apps/mobile/components/ui/text.tsx`:
-
-```tsx
-import * as React from "react";
-import { Text as RNText, type TextProps } from "react-native";
-import { useCssElement } from "react-native-css";
-import { cn } from "@/lib/utils";
-
-export const TextClassContext = React.createContext<string | undefined>(undefined);
-
-type Props = TextProps & { className?: string; asChild?: boolean };
-
-export function Text({ className, ...props }: Props) {
-  const inheritedClass = React.useContext(TextClassContext);
-  return useCssElement(
-    RNText,
-    {
-      ...props,
-      className: cn("text-base text-foreground web:select-text", inheritedClass, className),
-    },
-    { className: "style" }
-  );
-}
-```
-
-`apps/mobile/components/ui/button.tsx`:
-
-```tsx
-import * as React from "react";
-import { Pressable as RNPressable, Platform, type PressableProps } from "react-native";
-import { useCssElement } from "react-native-css";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/lib/utils";
-import { TextClassContext } from "@/components/ui/text";
-
-const buttonVariants = cva(
-  "group flex items-center justify-center rounded-md " +
-    Platform.select({
-      web: "transition-colors active:opacity-90 hover:opacity-95",
-      default: "active:opacity-90",
-    })!,
-  {
-    variants: {
-      variant: {
-        default: "bg-primary",
-        destructive: "bg-destructive",
-        outline: "border border-input bg-background",
-        secondary: "bg-secondary",
-        ghost: "",
-        link: "",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 px-3",
-        lg: "h-11 px-8",
-        icon: "h-10 w-10",
-      },
-    },
-    defaultVariants: { variant: "default", size: "default" },
-  }
-);
-
-const buttonTextVariants = cva("font-medium", {
-  variants: {
-    variant: {
-      default: "text-primary-foreground",
-      destructive: "text-destructive-foreground",
-      outline: "text-foreground",
-      secondary: "text-secondary-foreground",
-      ghost: "text-foreground",
-      link: "text-primary underline",
-    },
-    size: {
-      default: "text-base",
-      sm: "text-sm",
-      lg: "text-lg",
-      icon: "text-base",
-    },
-  },
-  defaultVariants: { variant: "default", size: "default" },
-});
-
-type ButtonProps = PressableProps &
-  VariantProps<typeof buttonVariants> & {
-    className?: string;
-  };
-
-export function Button({ className, variant, size, children, ...props }: ButtonProps) {
-  const element = useCssElement(
-    RNPressable,
-    {
-      ...props,
-      className: cn(buttonVariants({ variant, size }), className),
-      children: (
-        <TextClassContext.Provider value={buttonTextVariants({ variant, size })}>
-          {children}
-        </TextClassContext.Provider>
-      ),
-    },
-    { className: "style" }
-  );
-  return element;
-}
-
-export { buttonVariants, buttonTextVariants };
-```
-
-Then create `apps/mobile/components.json` with the EXACT structure below. This matches what the reusables CLI considers "valid" so the bulk install step (A4d.5) doesn't trigger the "update components.json?" prompt (which mangles the file when piped — specifically the "Tailwind config path?" sub-prompt gets answered "y" from the `yes` pipe and writes `"config": "y"`):
-
-```json
-{
-  "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "new-york",
-  "rsc": false,
-  "tsx": true,
-  "tailwind": {
-    "config": "",
-    "css": "global.css",
-    "baseColor": "neutral",
-    "cssVariables": true
-  },
-  "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils",
-    "ui": "@/components/ui",
-    "lib": "@/lib",
-    "hooks": "@/hooks"
-  }
-}
-```
-
-And ensure `<PortalHost />` is rendered in `apps/mobile/app/_layout.tsx` (for dialogs/menus/popovers from reusables).
-
-### A4d.5 — Bulk install ALL reusables components
-
-With `components.json` in place, install all ~30 react-native-reusables components in one non-interactive shot. This is what actually makes `Card`, `Switch`, `Dialog`, `Input`, `Select`, `Tabs`, etc. usable — without this step, the mobile app has no reusables components installed and `import { Card } from "@/components/ui/card"` will fail.
-
-```bash
-cd {parent}/{name}/apps/mobile
-yes | npx @react-native-reusables/cli@latest add -a -y -o
-```
-
-**Important flags:**
-- `-a` — add all components
-- `-y` — skip individual "add this?" confirmations
-- `-o` — overwrite existing files (important: the manual `text.tsx` and `button.tsx` we wrote in A4d will be replaced with the canonical CLI versions, which is what we want — the canonical versions use `className=` directly on RN primitives and don't need `useCssElement` wrapping)
-- `yes |` — pipes continuous `y` answers to any straggler prompts that `-y` doesn't cover
-
-**After the install:**
-- Verify `apps/mobile/components.json` still has `"tailwind.config": ""` (not `"y"`). The CLI may mangle this if any prompts slip through. Fix manually if so.
-- 5-minute timeout — the CLI downloads each component file + installs `@rn-primitives/*` deps automatically.
-- Note: the canonical reusables `text.tsx` and `button.tsx` pass `className=` directly to `RNText`/`Pressable`. They rely on `globalClassNamePolyfill: true` in metro.config.js (set in step A5 below). If the polyfill is false, these components render but className has no effect.
-
-**Step A4e — install `@expo/ui` for native primitives:**
-
-```bash
-cd {parent}/{name}/apps/mobile
-npx expo install @expo/ui
-```
-
-Follow the `expo-ui-swiftui` and `expo-ui-jetpack-compose` skills for the `Host` / `RNHostView` usage pattern. Note: `@expo/ui` requires a custom dev client — the app cannot run in Expo Go. First run must be `npx expo run:ios` or `npx expo run:android`.
-
-**Step A4f — install `lucide-react-native` + `react-native-svg` + `buffer`:**
-
-The welcome screens in A4g (Browse + Settings) import from `lucide-react-native`, and reusables components that ship icons pull it in too. The reusables bulk-install (A4d.5) does **not** reliably install `lucide-react-native` in the mobile workspace's node_modules under pnpm strict hoisting — Metro then fails with `Unable to resolve "lucide-react-native" from "apps/mobile/app/(tabs)/explore.tsx"` on first bundle. Install it explicitly. `react-native-svg` is lucide's peer and also needs to be hoisted. `buffer` is pulled by the pnpm strict-hoisting fix (same cause as `connect`).
-
-```bash
-cd {parent}/{name}/apps/mobile
-npx expo install lucide-react-native react-native-svg
-pnpm add buffer
-```
-
-Use `npx expo install` (not raw `pnpm add`) for `lucide-react-native` and `react-native-svg` so Expo pins versions compatible with SDK 55's React Native.
-
-**Step A4f.1 — add `dev` script to mobile's package.json:**
-
-`create-expo-app` scaffolds `start`/`ios`/`android` scripts but not `dev`. Turbo runs `dev` across every package for `pnpm dev`, so mobile needs its own `dev` entry. It must use `--dev-client` (not plain `--ios`) because `@expo/ui` requires the custom dev client — `expo start --ios` alone tries to open the Expo Go URL scheme and fails with `xcrun simctl openurl ... exp://... exited with non-zero code: 60`.
-
-Patch `apps/mobile/package.json` to add:
-
-```json
-{
-  "scripts": {
-    "dev": "expo start --ios --dev-client"
-  }
-}
-```
-
-**To add more reusables components later** (run interactively from the user's terminal, not piped):
-
-```bash
-cd {parent}/{name}/apps/mobile
-npx @react-native-reusables/cli@latest add
-```
-
-### A4f.5 — Add web→mobile token sync script
-
-The mobile `global.css` is **generated from web's `packages/ui/src/styles/globals.css`** so design tokens stay in sync. Web is the source of truth; the script converts oklch() colors (which React Native cannot parse) to hex on the way over.
-
-**Why this matters:** without sync, `bg-primary`, `text-foreground`, etc. on the mobile reusables components resolve to nothing because mobile's tokens won't match the format Tailwind v4 expects.
-
-**Step 1 — add `culori` as a root devDependency:**
-
-```bash
-cd {parent}/{name}
-pnpm add -Dw culori
-```
-
-**Step 2 — write `scripts/sync-mobile-tokens.mjs`:**
-
-```js
-#!/usr/bin/env node
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { parse, formatHex } from "culori";
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const WEB_TOKENS = resolve(ROOT, "packages/ui/src/styles/globals.css");
-const MOBILE_TOKENS = resolve(ROOT, "apps/mobile/global.css");
-
-const MOBILE_TOKEN_NAMES = [
-  "background", "foreground",
-  "card", "card-foreground",
-  "popover", "popover-foreground",
-  "primary", "primary-foreground",
-  "secondary", "secondary-foreground",
-  "muted", "muted-foreground",
-  "accent", "accent-foreground",
-  "destructive", "destructive-foreground",
-  "border", "input", "ring",
-];
-
-function parseTokenBlock(css, selector) {
-  const re = new RegExp(`${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]+)\\}`);
-  const match = css.match(re);
-  if (!match) return {};
-  const out = {};
-  for (const line of match[1].split("\n")) {
-    const m = line.trim().match(/^--([\w-]+):\s*([^;]+);?$/);
-    if (!m) continue;
-    out[m[1]] = m[2].trim();
-  }
-  return out;
-}
-
-function toHex(value) {
-  try {
-    const parsed = parse(value);
-    return parsed ? formatHex(parsed) : null;
-  } catch { return null; }
-}
-
-function buildThemeBlock(tokens) {
-  const lines = [];
-  for (const name of MOBILE_TOKEN_NAMES) {
-    const value = tokens[name];
-    if (!value) continue;
-    const hex = toHex(value);
-    if (!hex) continue;
-    lines.push(`  --color-${name}: ${hex};`);
-  }
-  if (!lines.find((l) => l.includes("--color-destructive-foreground"))) {
-    lines.push(`  --color-destructive-foreground: #ffffff;`);
-  }
-  return lines.join("\n");
-}
-
-function generateMobileCSS(lightTokens, darkTokens) {
-  const lightBlock = buildThemeBlock(lightTokens);
-  const darkBlock = buildThemeBlock(darkTokens);
-  return `/*
- * DO NOT EDIT — generated from packages/ui/src/styles/globals.css.
- * Run \\\`pnpm sync:tokens\\\` from the monorepo root to regenerate.
- */
-
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);
-@import "tailwindcss/utilities.css";
-
-@media android {
-  :root { --font-mono: monospace; --font-sans: normal; }
-}
-@media ios {
-  :root { --font-mono: ui-monospace; --font-sans: system-ui; }
-}
-
-@theme {
-${lightBlock}
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-${darkBlock.replace(/^/gm, "  ")}
-  }
-}
-`;
-}
-
-const webCss = readFileSync(WEB_TOKENS, "utf-8");
-const lightTokens = parseTokenBlock(webCss, ":root");
-const darkTokens = parseTokenBlock(webCss, ".dark");
-const mobileCss = generateMobileCSS(lightTokens, darkTokens);
-mkdirSync(dirname(MOBILE_TOKENS), { recursive: true });
-writeFileSync(MOBILE_TOKENS, mobileCss);
-console.log(`wrote ${MOBILE_TOKENS} (${Object.keys(lightTokens).length} tokens)`);
-```
-
-**Step 3 — wire it into root `package.json` scripts:**
-
-Add these to the existing `"scripts"` block. The key behavior is that `dev:mobile` chains `sync:tokens` so it runs every time the mobile dev server starts:
-
-```json
-{
-  "scripts": {
-    "sync:tokens": "node scripts/sync-mobile-tokens.mjs",
-    "dev:mobile": "pnpm sync:tokens && turbo --filter mobile dev"
-  }
-}
-```
-
-**Step 4 — run it once to generate the initial `apps/mobile/global.css`:**
-
-```bash
-cd {parent}/{name}
-pnpm sync:tokens
-```
-
-This overwrites whatever `apps/mobile/global.css` was scaffolded earlier. Going forward, teammates either run `pnpm sync:tokens` manually or rely on `pnpm dev:mobile` to do it automatically.
-
-**Important:** the generated `apps/mobile/global.css` has a `DO NOT EDIT` header. To change colors, teammates edit `packages/ui/src/styles/globals.css` (the web/shadcn source) and re-run `pnpm sync:tokens`.
-
-### A4g — Replace default Expo template with welcome screen
-
-`create-expo-app`'s default template ships a generic "Welcome 👋" screen with placeholder text. Replace it with a purpose-built three-tab starter that demonstrates **both** sides of the stack:
-
-1. **Home** (`index.tsx`) — pure `@expo/ui/swift-ui` native SwiftUI primitives (Host, VStack, HStack, Image, Text, Button, Spacer). SF Symbol grid, system-font title, SwiftUI `borderedProminent` + `bordered` buttons. No NativeWind, no reusables. Unmistakably native on iOS, demonstrates the escape hatch for screens that want to be fully native.
-2. **Browse + Settings** — NativeTabs + reusables (`Card`/`Button`/`Badge`/`Avatar`/`Separator`), NativeWind classes, lucide icons, semantic theme tokens, OS-driven dark mode. Demonstrates the cross-platform path that should cover 90% of screens.
-
-That split is deliberate: it shows new projects both options side-by-side so teams can pick per screen.
-
-Home content: a 2x2 grid of SF shape icons (square/circle/diamond/triangle), "A Basic Template" title, one-line muted subtitle, and a side-by-side **Start** / **Docs** button row, all vertically centered by `Spacer`s. Browse shows a feed of Cards with inline icons and Badges (the "look what you can build" page). Settings shows an iOS-style grouped-row list with Avatar header.
-
-**Replace `apps/mobile/app/(tabs)/_layout.tsx`:**
-
-```tsx
-import { NativeTabs } from "expo-router/unstable-native-tabs";
-
-export default function TabLayout() {
-  return (
-    <NativeTabs minimizeBehavior="onScrollDown">
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf="square.fill" drawable="square" />
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Icon sf="diamond.fill" drawable="diamond" />
-        <NativeTabs.Trigger.Label>Browse</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Icon sf="triangle.fill" drawable="triangle" />
-        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-```
-
-**Replace `apps/mobile/app/(tabs)/index.tsx`** — this one's intentionally different from Browse/Settings. It uses **`@expo/ui/swift-ui` native SwiftUI primitives** (Host, VStack, HStack, Image, Text, Button, Spacer) instead of NativeWind + reusables. Why: Home is the first thing a user sees, so it should look unmistakably native on iOS — SF Symbols, system fonts, SwiftUI button styles, liquid-glass-ready. It also demonstrates the `@expo/ui` escape hatch for anyone who wants to go native-first for specific screens later. The rest of the app (Browse, Settings) stays on NativeWind + reusables so the cross-platform story holds.
-
-Two `Spacer` children sandwich the content group (icon grid + title + subtitle + button row), centering it vertically. The button row uses `HStack` with `frame({ maxWidth: Infinity })` on each button's inner Text so they split the available width 50/50.
-
-```tsx
-import { Stack } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  Host,
-  VStack,
-  HStack,
-  Image,
-  Text,
-  Button,
-  Spacer,
-} from "@expo/ui/swift-ui";
-import {
-  padding,
-  font,
-  foregroundColor,
-  buttonStyle,
-  controlSize,
-  frame,
-  multilineTextAlignment,
-} from "@expo/ui/swift-ui/modifiers";
-
-export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <>
-      <Stack.Screen options={{ title: "Home" }} />
-      <Host style={{ flex: 1 }}>
-        <VStack
-          spacing={12}
-          modifiers={[
-            frame({ maxWidth: Infinity, maxHeight: Infinity }),
-            padding({
-              top: insets.top + 32,
-              bottom: insets.bottom + 100,
-              horizontal: 32,
-            }),
-          ]}
-        >
-          <Spacer />
-          <VStack spacing={12}>
-            <HStack spacing={12}>
-              <Image systemName="square.fill" size={40} />
-              <Image systemName="circle.fill" size={40} />
-            </HStack>
-            <HStack spacing={12}>
-              <Image systemName="diamond.fill" size={40} />
-              <Image systemName="triangle.fill" size={40} />
-            </HStack>
-          </VStack>
-          <Text
-            modifiers={[
-              font({ size: 34, weight: "bold" }),
-              padding({ top: 24 }),
-            ]}
-          >
-            A Basic Template
-          </Text>
-          <Text
-            modifiers={[
-              font({ size: 16 }),
-              foregroundColor("#8e8e93"),
-              multilineTextAlignment("center"),
-            ]}
-          >
-            A lil template for quick starting projects for a basic mobile app.
-          </Text>
-          <HStack spacing={12} modifiers={[padding({ top: 16 })]}>
-            <Button
-              onPress={() => {}}
-              modifiers={[
-                buttonStyle("borderedProminent"),
-                controlSize("large"),
-              ]}
-            >
-              <Text modifiers={[frame({ maxWidth: Infinity })]}>Start</Text>
-            </Button>
-            <Button
-              onPress={() => {}}
-              modifiers={[buttonStyle("bordered"), controlSize("large")]}
-            >
-              <Text modifiers={[frame({ maxWidth: Infinity })]}>Docs</Text>
-            </Button>
-          </HStack>
-          <Spacer />
-        </VStack>
-      </Host>
-    </>
-  );
-}
-```
-
-**Replace `apps/mobile/app/(tabs)/explore.tsx`:**
-
-```tsx
-import { ScrollView } from "react-native";
-import { Stack } from "expo-router";
-import {
-  Box,
-  Palette,
-  Type,
-  MousePointerClick,
-  Layout,
-  Bell,
-} from "lucide-react-native";
-import { View } from "@/tw";
-import { Text } from "@/components/ui/text";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
-const SECTIONS = [
-  {
-    icon: Box,
-    title: "Components",
-    description: "30+ pre-installed reusables — cards, dialogs, sheets.",
-    tag: "UI",
-  },
-  {
-    icon: Type,
-    title: "Typography",
-    description: "System font scale with h1–h4, body, and muted styles.",
-    tag: "Text",
-  },
-  {
-    icon: Palette,
-    title: "Theme tokens",
-    description: "Semantic colors that flip automatically with dark mode.",
-    tag: "Design",
-  },
-  {
-    icon: Layout,
-    title: "Layout",
-    description: "Native tabs, stack, safe areas, and toolbars built in.",
-    tag: "Nav",
-  },
-  {
-    icon: MousePointerClick,
-    title: "Interactions",
-    description: "Haptic-ready pressables and spring animations.",
-    tag: "Motion",
-  },
-  {
-    icon: Bell,
-    title: "System",
-    description: "Notifications, portal, and gesture handler wired up.",
-    tag: "Native",
-  },
-];
-
-export default function ExploreScreen() {
-  return (
-    <>
-      <Stack.Screen options={{ title: "Browse" }} />
-      <ScrollView
-        style={{ flex: 1 }}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: 32 }}
-      >
-        <View className="gap-5 px-5 pt-6">
-          <View className="gap-2">
-            <Text className="text-3xl font-bold tracking-tight text-foreground">
-              Browse
-            </Text>
-            <Text className="text-base text-muted-foreground">
-              A quick tour of everything that ships with the template.
-            </Text>
-          </View>
-
-          <View className="gap-3">
-            {SECTIONS.map((section) => {
-              const Icon = section.icon;
-              return (
-                <Card key={section.title}>
-                  <CardHeader className="flex-row items-start gap-4">
-                    <View className="h-11 w-11 items-center justify-center rounded-xl bg-secondary">
-                      <Icon size={22} className="text-foreground" />
-                    </View>
-                    <View className="flex-1 gap-1.5">
-                      <View className="flex-row items-center gap-2">
-                        <CardTitle>{section.title}</CardTitle>
-                        <Badge variant="outline">
-                          <Text>{section.tag}</Text>
-                        </Badge>
-                      </View>
-                      <CardDescription>{section.description}</CardDescription>
-                    </View>
-                  </CardHeader>
-                </Card>
-              );
-            })}
-          </View>
-        </View>
-      </ScrollView>
-    </>
-  );
-}
-```
-
-**Wire `apps/mobile/app/_layout.tsx`** — OS-driven dark mode via RN's `useColorScheme()` (no custom ThemeContext, no in-app toggle):
-
-```tsx
-import "@/global.css";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider as NavThemeProvider,
-} from "@react-navigation/native";
-import { PortalHost } from "@rn-primitives/portal";
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useColorScheme } from "react-native";
-import "react-native-reanimated";
-
-export const unstable_settings = { anchor: "(tabs)" };
-
-export default function RootLayout() {
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-  return (
-    <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: "modal", title: "Modal" }} />
-      </Stack>
-      <StatusBar style={isDark ? "light" : "dark"} />
-      <PortalHost />
-    </NavThemeProvider>
-  );
-}
-```
-
-**Replace `apps/mobile/app/(tabs)/settings.tsx`** with an iOS-style grouped-row list (Avatar header + three Card-styled sections):
-
-```tsx
-import { ScrollView } from "react-native";
-import { Stack } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
-import { View, Pressable } from "@/tw";
-import { Text } from "@/components/ui/text";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-
-type Row = {
-  label: string;
-  value?: string;
-  badge?: string;
-};
-
-type Section = {
-  title: string;
-  rows: Row[];
-};
-
-const SECTIONS: Section[] = [
-  {
-    title: "Account",
-    rows: [
-      { label: "Profile", value: "You" },
-      { label: "Email", value: "you@example.com" },
-      { label: "Subscription", badge: "Pro" },
-    ],
-  },
-  {
-    title: "Preferences",
-    rows: [
-      { label: "Appearance", value: "System" },
-      { label: "Notifications", value: "On" },
-      { label: "Language", value: "English" },
-    ],
-  },
-  {
-    title: "About",
-    rows: [
-      { label: "Version", value: "0.1.0" },
-      { label: "Privacy Policy" },
-      { label: "Terms of Service" },
-    ],
-  },
-];
-
-function SettingsRow({ row, isLast }: { row: Row; isLast: boolean }) {
-  return (
-    <>
-      <Pressable className="flex-row items-center justify-between px-5 py-4 active:bg-accent">
-        <Text className="text-base text-card-foreground">{row.label}</Text>
-        <View className="flex-row items-center gap-2">
-          {row.value ? (
-            <Text className="text-sm text-muted-foreground">{row.value}</Text>
-          ) : null}
-          {row.badge ? (
-            <Badge>
-              <Text>{row.badge}</Text>
-            </Badge>
-          ) : null}
-          <ChevronRight size={18} className="text-muted-foreground" />
-        </View>
-      </Pressable>
-      {isLast ? null : <Separator className="ml-5" />}
-    </>
-  );
-}
-
-export default function SettingsScreen() {
-  return (
-    <>
-      <Stack.Screen options={{ title: "Settings" }} />
-      <ScrollView
-        style={{ flex: 1 }}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: 32 }}
-      >
-        <View className="gap-6 px-5 pt-6">
-          <View className="flex-row items-center gap-4">
-            <Avatar alt="You" className="h-16 w-16">
-              <AvatarFallback>
-                <Text className="text-lg font-semibold">A</Text>
-              </AvatarFallback>
-            </Avatar>
-            <View className="flex-1 gap-1">
-              <Text className="text-xl font-semibold text-foreground">
-                Welcome
-              </Text>
-              <Text className="text-sm text-muted-foreground">
-                you@example.com
-              </Text>
-            </View>
-          </View>
-
-          {SECTIONS.map((section) => (
-            <View key={section.title} className="gap-2">
-              <Text className="px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {section.title}
-              </Text>
-              <View className="overflow-hidden rounded-xl border border-border bg-card">
-                {section.rows.map((row, i) => (
-                  <SettingsRow
-                    key={row.label}
-                    row={row}
-                    isLast={i === section.rows.length - 1}
-                  />
-                ))}
-              </View>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </>
-  );
-}
-```
-
-**Notes:**
-- `NativeTabs` from `expo-router/unstable-native-tabs` gets the iOS 26+ liquid glass tab bar automatically. On Android it falls back to Material 3 bottom navigation. SF icons are set via `sf=`; Android via `drawable=` (not `md=`).
-- SF Symbols (`sf="..."`) work without installing `expo-symbols` because NativeTabs accepts them directly. `square.fill` / `diamond.fill` / `triangle.fill` are used deliberately as generic placeholder icons — swap to semantic ones (`house.fill`, `magnifyingglass`, `gearshape.fill`) when the product concept is defined.
-- `Stack.Toolbar` is deliberately NOT used on the Home screen. It's iOS-only (SDK 55+), adds noise to a minimal welcome screen, and the pattern is easy to add later. If you need it for another screen, `<Stack.Toolbar placement="right"><Stack.Toolbar.Button icon="plus.circle.fill" onPress={...} /></Stack.Toolbar>` inside a `<Stack.Screen>` component is the full recipe.
-- Dark mode is **OS-driven** via RN's `useColorScheme()`. No in-app toggle, no `lib/theme.tsx` ThemeContext — users flip it in Control Center. The `@media (prefers-color-scheme: dark) { :root { ... } }` block generated by `sync:tokens` (step A4f.5) handles the CSS variable flip automatically.
-- `lucide-react-native` icons are used inline on Browse and Settings (Box, Type, Palette, Layout, MousePointerClick, Bell, ChevronRight). Home uses SF Symbols directly via `@expo/ui` `Image systemName={...}` — no lucide there. The reusables bulk-install in A4d.5 adds `lucide-react-native` as a peer dep for the Browse/Settings path.
-- Home's SwiftUI layout uses two `Spacer` children sandwiching the content group (icon grid + title + subtitle + button row). SwiftUI centers the whole stack vertically as one connected unit. The button row uses an `HStack` with `frame({ maxWidth: Infinity })` on each button's inner `<Text>` so they split the available width 50/50 — applying the frame to the `<Button>` itself doesn't work because SwiftUI's `borderedProminent` and `bordered` styles size their background to the label, not the hit area.
-- Card composition rule: use `Card > CardHeader (CardTitle + CardDescription) > CardContent` — do NOT strip Card's default `py-6 gap-6` padding to hack a full-bleed row list. For iOS-grouped-row patterns (Settings), use a plain `bg-card border border-border rounded-xl` View instead — Card is the wrong primitive for that shape.
-- If a different (or older) template is being used and there's no `app/(tabs)/` directory, follow the `building-native-ui` skill's `route-structure.md` reference for the right place to put these files.
-
-### A5. Patch `apps/mobile/metro.config.js` for the monorepo
-
-Replace/write the metro config to watch the monorepo root and resolve from both app and root `node_modules`:
-
-```js
-const { getDefaultConfig } = require('expo/metro-config');
-const { withNativeWind } = require('nativewind/metro');
-const path = require('path');
-
-const monorepoRoot = path.resolve(__dirname, '../..');
-const config = getDefaultConfig(__dirname);
-
-// Monorepo: watch root, resolve from both app and root node_modules
-config.watchFolders = [monorepoRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(__dirname, 'node_modules'),
-  path.resolve(monorepoRoot, 'node_modules'),
-];
-
-module.exports = withNativeWind(config, {
-  inlineVariables: false,         // keeps PlatformColor working in CSS variables
-  globalClassNamePolyfill: true,  // REQUIRED: react-native-reusables components pass className
-                                  // directly to RN primitives. Without this, nothing renders.
-});
-```
-
-### A6. Patch root `package.json` with Expo-in-pnpm workarounds
-
-Merge into `{parent}/{name}/package.json`. These overrides + packageExtensions are the proven nba-on-tv recipe — without them, Expo + pnpm strict hoisting breaks in subtle ways (missing `connect`, missing `metro-runtime`, React version mismatches, etc.).
-
-```json
-{
-  "scripts": {
-    "dev:web": "turbo --filter web dev",
-    "dev:mobile": "turbo --filter mobile dev",
-    "dev:design-system": "turbo --filter design-system dev"
-  },
-  "pnpm": {
-    "overrides": {
-      "react": "19.2.0",
-      "react-dom": "19.2.0",
-      "lightningcss": "1.30.1"
-    },
-    "onlyBuiltDependencies": ["unrs-resolver"],
-    "packageExtensions": {
-      "react-native-css-interop": {
-        "dependencies": { "connect": "^3.7.0" }
-      },
-      "@expo/cli": {
-        "dependencies": { "metro-runtime": "*" }
-      }
-    }
-  }
-}
-```
-
-Also create `{parent}/{name}/.npmrc` (single line — fixes another huge class of pnpm-strict-hoisting issues with Expo):
+Where `$SKILL_DIR` is this skill's base directory (the one containing `SKILL.md`). The script:
+
+1. Runs `pnpm dlx shadcn init --monorepo` (web + packages/ui + turbo.json)
+2. Installs all ~55 shadcn components
+3. Clones the design-system viewer into `apps/design-system/`
+4. Runs `patch-design-system.mjs` (style sync, font sync, 2s dev delay)
+5. Scaffolds the Expo app (if mobile), pins SDK 55, installs NativeWind v5 + reusables + @expo/ui + lucide
+6. Overlays `templates/mobile/*` onto `apps/mobile/` via `install-mobile-templates.mjs`
+7. Copies root `.npmrc` + `tsconfig.base.json` from `templates/root/`
+8. Creates `packages/shared/` placeholder
+9. Vendors `scripts/sync-mobile-tokens.mjs` into the project
+10. Patches root `package.json` (dev scripts + pnpm overrides) via `patch-root-package.mjs`
+11. `pnpm install`, `pnpm sync:tokens` (generates mobile `global.css`)
+12. `git init` + first commit
+
+Stream the script's output. If it errors, surface the last ~50 lines.
+
+### Step 3 — Report next steps
+
+Show the user:
+
+- Project path, structure tree, component counts (web: count `packages/ui/src/components/*.tsx`, mobile: `apps/mobile/components/ui/*.tsx`)
+- **Both / mobile paths:** first run of the mobile app MUST be `npx expo run:ios` inside `apps/mobile/` — `@expo/ui` needs a custom dev client and won't work in Expo Go. After that, `pnpm dev` from the repo root starts everything (web + mobile + design-system) with mobile attached to the built dev client.
+- **Both / web paths:** `pnpm dev:web` / `pnpm dev:design-system` for solo runs.
+
+## Repository layout
 
 ```
-shamefully-hoist=true
+.claude/skills/create-new-project/
+├── SKILL.md                  ← this file (thin orchestration layer)
+├── scripts/
+│   ├── bootstrap.mjs         ← main orchestrator (shell + node, no LLM)
+│   ├── patch-root-package.mjs
+│   ├── patch-design-system.mjs
+│   ├── install-mobile-templates.mjs
+│   └── sync-mobile-tokens.mjs  ← also vendored into the scaffolded project
+└── templates/
+    ├── root/                 ← .npmrc, tsconfig.base.json
+    ├── shared/               ← packages/shared placeholder
+    └── mobile/
+        ├── postcss.config.mjs
+        ├── components.json
+        ├── tsconfig.json
+        ├── metro.config.js
+        ├── lib/utils.ts
+        ├── tw/index.tsx       ← uses styled() from react-native-css
+        └── app/
+            ├── _layout.tsx     ← OS-driven dark mode, PortalHost
+            └── (tabs)/
+                ├── _layout.tsx  ← NativeTabs (liquid glass on iOS 26+)
+                ├── index.tsx    ← Home: pure @expo/ui SwiftUI primitives
+                ├── explore.tsx  ← Browse: Card feed with lucide icons
+                └── settings.tsx ← iOS-style grouped rows
 ```
 
-And create `{parent}/{name}/tsconfig.base.json` for shared compiler options (extended by `apps/mobile/tsconfig.json` and the web app):
+Note: `templates/mobile/components/ui/` intentionally does NOT contain `text.tsx` / `button.tsx`. The reusables CLI's bulk install (`yes | npx @react-native-reusables/cli add -a -y -o`) writes canonical versions of these files directly, and layering our stubs on top has historically been a drift source. Everything else in `templates/mobile/` overlays cleanly.
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true
-  },
-  "exclude": ["node_modules"]
-}
-```
+## Known sharp edges
 
-Update `apps/mobile/tsconfig.json` to extend both Expo's base and the root base, with the `@/` path alias:
-
-```json
-{
-  "extends": ["expo/tsconfig.base", "../../tsconfig.base.json"],
-  "compilerOptions": {
-    "strict": true,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"]
-    }
-  },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts",
-    "nativewind-env.d.ts"
-  ],
-  "exclude": ["node_modules"]
-}
-```
-
-### A7. Create `packages/shared` placeholder
-
-`{parent}/{name}/packages/shared/package.json`:
-
-```json
-{
-  "name": "@workspace/shared",
-  "version": "0.0.0",
-  "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" }
-}
-```
-
-`{parent}/{name}/packages/shared/src/index.ts`:
-
-```ts
-// Cross-platform types, API clients, and pure utilities go here.
-// Safe to import from both apps/web and apps/mobile.
-export {};
-```
-
-Ensure `pnpm-workspace.yaml` already includes `packages/*` (shadcn init creates it).
-
-### A8. Install and git init
-
-Use `CI=true` and `--no-frozen-lockfile` to avoid two known pnpm pitfalls in automated runs:
-- `CI=true` — prevents `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` (pnpm wants interactive confirmation to remove `node_modules`)
-- `--no-frozen-lockfile` — prevents `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` (we added `pnpm.overrides` after the lockfile was first generated by `create-expo-app`, so the lockfile is stale relative to the new overrides)
-
-```bash
-cd {parent}/{name}
-CI=true pnpm install --no-frozen-lockfile
-git init
-git add -A
-git commit -m "chore: scaffold cross-platform shadcn + expo monorepo"
-```
-
-### A9. Report
-
-- Project path
-- Structure tree
-- Component count (`packages/ui/src/components/*.tsx`)
-- Next steps:
-  - `cd {name} && pnpm dev:web`
-  - `cd {name}/apps/mobile && npx expo run:ios` (first run — custom dev client required because `@expo/ui`)
-  - After first run: `pnpm dev:mobile`
-  - `pnpm dev:design-system`
-
----
-
-## Path B — Web only
-
-Produces the same shape as the "Both" path minus `apps/mobile/`, minus `packages/shared/`, and minus the Expo/pnpm workarounds.
-
-Steps:
-
-1. **Scaffold web monorepo** — same as A1
-2. **Install all shadcn components** — same as A2
-3. **Add design-system viewer** — same as A3 (clone, style sync, font sync)
-4. **Install** — `cd {parent}/{name} && pnpm install`
-5. **Git init + commit** — `git init && git add -A && git commit -m "chore: scaffold shadcn web monorepo"`
-6. **Report** — project path, structure, component count, next steps (`pnpm dev`, `pnpm --filter design-system dev`)
-
----
-
-## Path C — Mobile only (standalone)
-
-Produces a standalone Expo app at `{parent}/{name}/`. No monorepo, no shared packages.
-
-**Follow the `react-native-reusables` skill** for scaffolding. Goal:
-
-- Expo SDK 55 + Expo Router
-- NativeWind v5 + Tailwind v4 CSS-first (per `expo-tailwind-setup` — prefer over any v3+babel setup)
-- react-native-reusables primitives + components in `components/ui/`
-- `tw/` wrappers using `useCssElement` (per `expo-tailwind-setup`)
-- `@expo/ui` installed (per `expo-ui-swiftui` + `expo-ui-jetpack-compose`)
-
-Steps:
-
-1. **Scaffold**:
-   ```bash
-   cd {parent}
-   npx @react-native-reusables/cli@latest init -t {name}
-   ```
-   If the CLI produces a Tailwind v3 + babel setup, strip it and replace with the `expo-tailwind-setup` recipe.
-
-2. **Add native UI**:
-   ```bash
-   cd {parent}/{name}
-   npx expo install @expo/ui
-   ```
-
-3. **Install + git**:
-   ```bash
-   pnpm install  # or bun/npm depending on what the CLI set up
-   git init && git add -A && git commit -m "chore: scaffold standalone expo app"
-   ```
-
-4. **Report**:
-   - Project path
-   - Next steps: `npx expo run:ios` (first run, required for `@expo/ui`), then `pnpm dev`
-
----
-
-## Known sharp edges to watch for during testing
-
-- **react-native-reusables CLI `init` hangs when piped:** Don't use `@react-native-reusables/cli init` in the scaffold flow — it requires interactive TTY input and hangs in automated runs. The A4 steps use `create-expo-app` + manual NativeWind v5 layering instead, which is deterministic. Use `@react-native-reusables/cli add` (also interactive, but doesn't hang) for adding more reusables components after the initial scaffold.
-- **Expo in pnpm monorepo:** the root `pnpm.overrides` + `packageExtensions` + `.npmrc shamefully-hoist=true` are all required. Without all three, resolution fails in different ways.
-- **NativeWind v5 oklch text bug (severity: critical, may already be fixed):** on `nativewind@5.0.0-preview.2` + `react-native-css@nightly`, Tailwind v4's `oklch()` colors broke `<Text>` rendering — text became invisible because RN can't parse oklch. `useCssElement` also overwrote inline `style` props, blocking the workaround. **Fix attempt:** we now pin `nativewind@5.0.0-preview.3` + `react-native-css@^3.0.7`. If text still renders invisible after the first run, the workaround is to import `Text` directly from `react-native` (not from `@/tw`) and use inline style for colors. Watch for this on the first iOS simulator launch.
-- **`@expo/ui` + Expo Go:** incompatible. First run of the mobile app must be `npx expo run:ios` or `expo run:android`, not `expo start`. Follow-up `pnpm dev` runs must pass `--dev-client` to `expo start` (see Step A4f.1) — otherwise `expo start --ios` tries to open the Expo Go URL scheme and fails with `xcrun simctl openurl ... exited with non-zero code: 60`.
-- **Font sync (web + design-system):** the one manual step in the web flow — easy to forget. Always verify the design-system app compiles after this step.
-- **`lucide-react-native` missing under pnpm strict hoisting:** the reusables bulk-install (A4d.5) pulls lucide transitively but doesn't always land it in `apps/mobile/node_modules` where Metro resolves. First bundle fails with `Unable to resolve "lucide-react-native" from "apps/mobile/app/(tabs)/explore.tsx"`. A4f now installs it explicitly.
-- **`react-native-svg` + `buffer`:** if the dependency tree pulls in `react-native-svg`, also add an explicit `buffer` dep. Same pnpm strict-hoisting cause as the `connect` workaround.
-- **Port 3000 race between web and design-system:** both are Next.js apps defaulting to 3000. Parallel `turbo dev` makes whichever claims the socket first win, leaving the other on a non-deterministic fallback. A3 now adds a 2s `sleep` to design-system's `dev` script so web always starts first. Don't pin explicit ports — users often have other projects holding 3000/3001.
+- **Expo in pnpm monorepo:** the root `pnpm.overrides` + `packageExtensions` + `.npmrc shamefully-hoist=true` are all required. `patch-root-package.mjs` + `templates/root/.npmrc` handle this.
+- **NativeWind v5 oklch text bug:** pinned to `nativewind@5.0.0-preview.3` + `react-native-css@^3.0.7`. If text renders invisible on first launch, import `Text` from `react-native` directly and use inline style for colors (workaround only).
+- **`@expo/ui` + Expo Go:** incompatible. First mobile run must be `npx expo run:ios` (not `expo start`). For subsequent `pnpm dev` runs, mobile's `dev` script uses `expo start --ios --dev-client` — the `--dev-client` flag is critical; plain `--ios` tries to open the Expo Go URL scheme and fails.
+- **`lucide-react-native` under pnpm strict hoisting:** installed explicitly in bootstrap because the reusables CLI doesn't always land it in `apps/mobile/node_modules`. Without the explicit install, Metro's first bundle fails to resolve `lucide-react-native`.
+- **Port 3000 race between web and design-system:** both default to 3000. `patch-design-system.mjs` adds a 2s `sleep` to design-system's `dev` script so web always claims the lowest free port first. Don't pin explicit ports — users often have other projects holding 3000/3001.
+- **Xcode ↔ iOS SDK exact-version match:** Xcode `X.Y` requires iOS `X.Y` simulator runtime, not just `X.*`. Preflight checks this.
