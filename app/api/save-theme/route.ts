@@ -6,6 +6,10 @@ interface SaveThemeRequest {
   light: Record<string, string>;
   dark: Record<string, string>;
   radius?: string;
+  // Tailwind color scale overrides — keys like "color-red-500" written to :root
+  tailwindColors?: Record<string, string>;
+  // Keys like "color-red-500" to delete from :root so Tailwind's default wins
+  deleteTailwindColors?: string[];
 }
 
 export async function POST(request: Request) {
@@ -39,6 +43,16 @@ export async function POST(request: Request) {
     // Update radius in :root
     if (body.radius) {
       css = updateCSSVar(css, ":root", "--radius", body.radius);
+    }
+
+    // Tailwind color scale overrides live in :root
+    if (body.tailwindColors && Object.keys(body.tailwindColors).length > 0) {
+      css = updateCSSBlock(css, ":root", body.tailwindColors);
+    }
+
+    // Delete specified Tailwind color overrides from :root.
+    if (body.deleteTailwindColors && body.deleteTailwindColors.length > 0) {
+      css = deleteCSSVars(css, ":root", body.deleteTailwindColors);
     }
 
     fs.writeFileSync(cssPath, css);
@@ -90,4 +104,31 @@ function updateCSSVar(
   value: string
 ): string {
   return updateCSSBlock(css, selector, { [varName]: value });
+}
+
+function deleteCSSVars(
+  css: string,
+  selector: string,
+  varNames: string[]
+): string {
+  const escapedSelector = selector.replace(".", "\\.");
+  const blockRe = new RegExp(
+    `(${escapedSelector}\\s*\\{)([^}]+)(\\})`,
+    "s"
+  );
+  const match = css.match(blockRe);
+  if (!match) return css;
+
+  let block = match[2];
+  for (const name of varNames) {
+    const varName = name.startsWith("--") ? name : `--${name}`;
+    // Match whole line: optional leading whitespace, the var, a value, and the trailing newline.
+    const lineRe = new RegExp(
+      `\\n?\\s*${varName.replace(/-/g, "\\-")}\\s*:[^;]+;`,
+      "g"
+    );
+    block = block.replace(lineRe, "");
+  }
+
+  return css.replace(blockRe, `${match[1]}${block}${match[3]}`);
 }

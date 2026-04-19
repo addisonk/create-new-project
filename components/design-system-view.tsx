@@ -13,8 +13,19 @@ import { ThemeTinker, useThemeTinker, ThemeEditorProvider, useThemeEditor, SANS_
 import { Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@workspace/ui/components/command";
-import Sketch from "@uiw/react-color-sketch";
 import Preview02 from "@/components/blocks/preview-02/index";
+import {
+  TailwindColorRow,
+  TailwindColorHeader,
+} from "@/components/tailwind-color-row";
+import { ColorPickerContent } from "@/components/color-picker-content";
+import { toast } from "sonner";
+
+const TAILWIND_FAMILIES = [
+  "red", "orange", "amber", "yellow", "lime", "green", "emerald",
+  "teal", "cyan", "sky", "blue", "indigo", "violet", "purple",
+  "fuchsia", "pink", "rose",
+] as const;
 
 const Preview = React.lazy(() => import("@/components/blocks/preview/index"));
 
@@ -271,6 +282,25 @@ function DesignSystemContent({ config }: { config: DesignSystemConfig }) {
       </section>
       </>}
 
+      {/* ─── Tailwind Colors ─── */}
+      <Separator />
+      <section className="container mx-auto max-w-7xl px-6 py-16 md:px-10">
+        <div className="mb-8 flex items-baseline justify-between gap-4">
+          <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
+            Tailwind Colors
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Click a swatch to copy its class name.
+          </p>
+        </div>
+        <div className="space-y-3">
+          <TailwindColorHeader />
+          {TAILWIND_FAMILIES.map((family) => (
+            <TailwindColorRow key={family} family={family} />
+          ))}
+        </div>
+      </section>
+
       <SaveBar />
     </main>
     </ThemeEditorProvider>
@@ -352,24 +382,40 @@ function getThemePresetColors(): string[] {
   return colors;
 }
 
-function useDebouncedLevaSync() {
-  const ctx = useThemeEditor();
-  const timerRef = React.useRef<ReturnType<typeof setTimeout>>();
+// ─── Sub-components ───
 
-  return React.useCallback((key: string, hex: string) => {
-    // Instant: set CSS variable directly for zero-lag preview
-    const cssKey = key.startsWith("dk:") ? key.slice(3) : key;
-    document.documentElement.style.setProperty(`--${cssKey}`, hex);
-
-    // Debounced: sync to Leva store (triggers change tracking for save)
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      ctx?.editor.set({ [key]: hex });
-    }, 150);
-  }, [ctx]);
+// Convert a hex color to the oklch format used throughout globals.css.
+function hexToOklch(hex: string): string {
+  try {
+    const oklch = new Color(hex).to("oklch");
+    return `oklch(${oklch.coords[0]?.toFixed(4)} ${oklch.coords[1]?.toFixed(4)} ${oklch.coords[2]?.toFixed(2)})`;
+  } catch {
+    return hex;
+  }
 }
 
-// ─── Sub-components ───
+// Save a single semantic token directly to globals.css, bypassing the Leva
+// change-tracking flow. Used by the Save button inside each color picker popover.
+async function saveSingleToken(tokenKey: string, hex: string): Promise<boolean> {
+  const isDark = document.documentElement.classList.contains("dark");
+  const oklch = hexToOklch(hex);
+  const payload = isDark
+    ? { light: {}, dark: { [tokenKey]: oklch } }
+    : { light: { [tokenKey]: oklch }, dark: {} };
+  try {
+    const res = await fetch("/api/save-theme", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    toast.success(`Saved ${tokenKey} to globals.css`);
+    return true;
+  } catch (err) {
+    toast.error("Save failed: " + err);
+    return false;
+  }
+}
 
 function PaletteBlock({
   bg, fg, name, span, height = 120,
@@ -377,11 +423,11 @@ function PaletteBlock({
   bg: string; fg: string; name: string; span?: string; height?: number;
 }) {
   const ctx = useThemeEditor();
-  const syncColor = useDebouncedLevaSync();
   const ref = React.useRef<HTMLDivElement>(null);
   const [open, setOpen] = React.useState(false);
-  const [pickerColor, setPickerColor] = React.useState("#888888");
+  const [initialHex, setInitialHex] = React.useState("#888888");
   const [presets, setPresets] = React.useState<string[]>([]);
+  const committedThisSession = React.useRef(false);
   const fgName = fg.replace("text-", "");
   const tokenKey = bg.replace("bg-", "");
 
@@ -395,14 +441,18 @@ function PaletteBlock({
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
       if (isOpen) {
+        committedThisSession.current = false;
         if (!ctx?.tinkerOpen) ctx?.setTinkerOpen(true);
         if (ref.current) {
           try {
             const c = new Color(window.getComputedStyle(ref.current).backgroundColor);
-            setPickerColor(c.to("srgb").toString({ format: "hex" }));
+            setInitialHex(c.to("srgb").toString({ format: "hex" }));
           } catch {}
         }
         setPresets(getThemePresetColors());
+      } else if (!committedThisSession.current) {
+        // Closed without Save — restore preview to pre-popover value.
+        document.documentElement.style.setProperty(`--${tokenKey}`, initialHex);
       }
       setOpen(isOpen);
     }}>
@@ -415,16 +465,25 @@ function PaletteBlock({
           {label}
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
-        <Sketch
-          color={pickerColor}
-          disableAlpha
+      <PopoverContent className="w-auto p-0" align="start" sideOffset={8}>
+        <ColorPickerContent
+          title={name}
+          initialHex={initialHex}
           presetColors={presets}
-          onChange={(color) => {
-            const isDark = document.documentElement.classList.contains("dark");
-            const key = isDark ? `dk:${tokenKey}` : tokenKey;
-            syncColor(key, color.hex);
-            setPickerColor(color.hex);
+          onPreview={(hex) => {
+            document.documentElement.style.setProperty(`--${tokenKey}`, hex);
+          }}
+          onCommit={async (hex) => {
+            const ok = await saveSingleToken(tokenKey, hex);
+            if (ok) {
+              committedThisSession.current = true;
+              document.documentElement.style.setProperty(`--${tokenKey}`, hex);
+              setOpen(false);
+            }
+          }}
+          onCancel={() => {
+            document.documentElement.style.setProperty(`--${tokenKey}`, initialHex);
+            setOpen(false);
           }}
         />
       </PopoverContent>
@@ -459,12 +518,12 @@ function getContrastTextColor(fgColor: string, pageBgColor: string): string {
 
 function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
   const ctx = useThemeEditor();
-  const syncColor = useDebouncedLevaSync();
   const ref = React.useRef<HTMLDivElement>(null);
   const [textColor, setTextColor] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState(false);
-  const [pickerColor, setPickerColor] = React.useState("#888888");
+  const [initialHex, setInitialHex] = React.useState("#888888");
   const [presets, setPresets] = React.useState<string[]>([]);
+  const committedThisSession = React.useRef(false);
   const tokenKey = bg.replace("bg-", "");
 
   React.useEffect(() => {
@@ -495,14 +554,17 @@ function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
       if (isOpen) {
+        committedThisSession.current = false;
         if (!ctx?.tinkerOpen) ctx?.setTinkerOpen(true);
         if (ref.current) {
           try {
             const c = new Color(window.getComputedStyle(ref.current).backgroundColor);
-            setPickerColor(c.to("srgb").toString({ format: "hex" }));
+            setInitialHex(c.to("srgb").toString({ format: "hex" }));
           } catch {}
         }
         setPresets(getThemePresetColors());
+      } else if (!committedThisSession.current) {
+        document.documentElement.style.setProperty(`--${tokenKey}`, initialHex);
       }
       setOpen(isOpen);
     }}>
@@ -515,16 +577,25 @@ function AutoContrastBlock({ bg, name }: { bg: string; name: string }) {
           {label}
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
-        <Sketch
-          color={pickerColor}
-          disableAlpha
+      <PopoverContent className="w-auto p-0" align="start" sideOffset={8}>
+        <ColorPickerContent
+          title={name}
+          initialHex={initialHex}
           presetColors={presets}
-          onChange={(color) => {
-            const isDark = document.documentElement.classList.contains("dark");
-            const key = isDark ? `dk:${tokenKey}` : tokenKey;
-            syncColor(key, color.hex);
-            setPickerColor(color.hex);
+          onPreview={(hex) => {
+            document.documentElement.style.setProperty(`--${tokenKey}`, hex);
+          }}
+          onCommit={async (hex) => {
+            const ok = await saveSingleToken(tokenKey, hex);
+            if (ok) {
+              committedThisSession.current = true;
+              document.documentElement.style.setProperty(`--${tokenKey}`, hex);
+              setOpen(false);
+            }
+          }}
+          onCancel={() => {
+            document.documentElement.style.setProperty(`--${tokenKey}`, initialHex);
+            setOpen(false);
           }}
         />
       </PopoverContent>

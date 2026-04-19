@@ -94,6 +94,12 @@ if (platform === "both" || platform === "web") {
 
   // 5. Patch design-system (style sync + font sync + sleep 2)
   runIn(project, `node ${JSON.stringify(join(SCRIPTS, "patch-design-system.mjs"))} --root .`);
+
+  // 6. Append the design-system viewer's CSS dependencies to packages/ui
+  //    globals.css — the Tailwind color grid needs the `@source inline(...)`
+  //    safelist or every bg-* gets purged; the color picker needs the
+  //    `.ds-color-picker` overrides or @uiw's Sketch wrapper hijacks padding.
+  runIn(project, `node ${JSON.stringify(join(SCRIPTS, "patch-ui-globals.mjs"))} --root .`);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
