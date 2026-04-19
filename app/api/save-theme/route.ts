@@ -55,7 +55,20 @@ export async function POST(request: Request) {
       css = deleteCSSVars(css, ":root", body.deleteTailwindColors);
     }
 
-    fs.writeFileSync(cssPath, css);
+    // Atomic write + explicit mtime bump. Turbopack's dev-time file watcher
+    // sometimes misses `fs.writeFileSync` calls that originate from inside
+    // the same Node process it's running (the watcher de-dupes self-triggered
+    // events). That leaves the compiled CSS chunk stale, and the UI shows
+    // the pre-edit palette even though the file on disk is correct.
+    //
+    // Writing to a .tmp file and renameSync into place produces a CREATE +
+    // RENAME pair that looks identical to an external editor save — watchers
+    // reliably fire on the rename. The utimesSync is a belt-and-suspenders
+    // nudge in case chokidar is comparing mtimes.
+    const tmpPath = `${cssPath}.tmp`;
+    fs.writeFileSync(tmpPath, css);
+    fs.renameSync(tmpPath, cssPath);
+    fs.utimesSync(cssPath, new Date(), new Date());
 
     return NextResponse.json({ success: true, path: cssPath });
   } catch (err) {
