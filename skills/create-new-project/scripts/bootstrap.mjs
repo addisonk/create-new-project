@@ -8,7 +8,7 @@
 //     --platform both|web|mobile \
 //     --preset <shadcn-preset-id>
 //
-// The LLM's job is to ask the user for --name / --platform / --preset / --parent
+// The agent's job is to ask the user for --name / --platform / --preset / --parent
 // and then invoke this script. Everything else is shell + node.
 
 import {

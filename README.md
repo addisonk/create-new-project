@@ -1,14 +1,14 @@
 # Create New Project
 
-A Claude Code plugin that scaffolds a full cross-platform product in one shot — Next.js + shadcn/ui on the web side, Expo + NativeWind v5 + react-native-reusables + `@expo/ui` on the mobile side, and a design-system viewer — all wired into a single pnpm monorepo.
+An agent plugin for Claude Code and Codex that scaffolds a full cross-platform product in one shot — Next.js + shadcn/ui on the web side, Expo + NativeWind v5 + react-native-reusables + `@expo/ui` on the mobile side, and a design-system viewer — all wired into a single pnpm monorepo.
 
-Invoke with `/create-new-project` and answer three questions: project name, platforms, shadcn preset. Everything else is deterministic.
+Invoke with `/create-new-project` in Claude Code or `$create-new-project` in Codex, then answer three questions: project name, platforms, shadcn preset. Everything else is deterministic.
 
 ## Philosophy
 
-**Scripts execute, the LLM orchestrates.**
+**Scripts execute, the agent orchestrates.**
 
-Scaffolding is a deterministic task. When an LLM has to faithfully reproduce config files, JSON merges, and component code on every run, drift creeps in — wrong paths, dropped function arguments, lost `package.json` scripts. This plugin narrows the LLM's job to three things:
+Scaffolding is a deterministic task. When an agent has to faithfully reproduce config files, JSON merges, and component code on every run, drift creeps in — wrong paths, dropped function arguments, lost `package.json` scripts. This plugin narrows the agent's job to three things:
 
 1. Check the environment (adapts to the user's machine).
 2. Collect inputs through interactive prompts.
@@ -31,6 +31,22 @@ Then invoke with:
 /create-new-project
 ```
 
+### Codex
+
+This repo includes a Codex manifest at `.codex-plugin/plugin.json`. Add the repo as a marketplace, install the plugin, then invoke the bundled skill:
+
+```bash
+codex plugin marketplace add addisonk/create-new-project
+```
+
+Restart Codex, open the Plugin Directory, choose the **Create New Project** marketplace, and install the plugin.
+
+Then in Codex:
+
+```
+$create-new-project
+```
+
 ### System requirements
 
 Checked automatically via preflight — the plugin stops and tells you what to fix if anything's missing.
@@ -50,7 +66,8 @@ Checked automatically via preflight — the plugin stops and tells you what to f
 ## Usage
 
 ```
-/create-new-project
+/create-new-project   # Claude Code
+$create-new-project   # Codex
 ```
 
 The skill asks:
@@ -73,7 +90,7 @@ cd {name}/apps/mobile && npx expo run:ios
 /plugin marketplace update create-new-project
 ```
 
-Updates only trigger when the `version` field bumps in `.claude-plugin/plugin.json` — commits alone don't trigger them. Check [releases](https://github.com/addisonk/create-new-project/releases) for what's in each version.
+Updates only trigger when the plugin `version` field bumps — commits alone don't trigger them. Check [releases](https://github.com/addisonk/create-new-project/releases) for what's in each version.
 
 ## What you get
 
@@ -169,9 +186,10 @@ For editing this plugin and testing changes immediately:
 # one-time setup
 git clone git@github.com:addisonk/create-new-project.git ~/Projects/create-new-project
 ln -s ~/Projects/create-new-project/skills/create-new-project ~/.claude/skills/create-new-project
+ln -s ~/Projects/create-new-project/skills/create-new-project ~/.agents/skills/create-new-project
 ```
 
-The symlink means edits under `skills/create-new-project/` are picked up immediately by Claude Code — no reinstall needed.
+The symlinks mean edits under `skills/create-new-project/` are picked up immediately by Claude Code and Codex — no reinstall needed. Codex also detects skill changes automatically in most cases; restart Codex if the update does not appear.
 
 Repo layout:
 
@@ -180,6 +198,10 @@ Repo layout:
 ├── .claude-plugin/
 │   ├── plugin.json          ← plugin manifest (bump version to ship updates)
 │   └── marketplace.json     ← self-hosted marketplace catalog
+├── .codex-plugin/
+│   └── plugin.json          ← Codex plugin manifest
+├── .agents/plugins/
+│   └── marketplace.json     ← Codex marketplace catalog
 └── skills/create-new-project/
     ├── SKILL.md             ← thin orchestration layer
     ├── scripts/
@@ -198,12 +220,12 @@ Repo layout:
 
 1. Make changes under `skills/create-new-project/`.
 2. Test locally (symlink means no reinstall).
-3. Bump `version` in **both** `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+3. Bump `version` in `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `.codex-plugin/plugin.json`.
 4. Commit and push. Users get it on their next `/plugin marketplace update`.
 
 ## Prerequisite skills
 
-The mobile path treats these Claude skills as source of truth. If you're on the Both or Mobile path and haven't installed them, quality drops:
+The mobile path treats these related skills as source of truth. If you're on the Both or Mobile path and haven't installed them, quality drops:
 
 - [`expo-tailwind-setup`](https://github.com/addisonk/ak-skills) — NativeWind v5 + Tailwind v4 CSS-first recipe
 - [`react-native-reusables`](https://github.com/addisonk/ak-skills) — shadcn-philosophy components for React Native

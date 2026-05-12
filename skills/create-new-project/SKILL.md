@@ -1,6 +1,6 @@
 ---
 name: create-new-project
-description: One-shot scaffold for a new cross-platform product — Next.js + shadcn/ui (web) and/or Expo + NativeWind v5 + react-native-reusables + @expo/ui (mobile), wired into a single pnpm monorepo. The LLM orchestrates questions and environment checks; everything file-level is vendored as templates + scripts so runs are deterministic.
+description: One-shot scaffold for a new cross-platform product — Next.js + shadcn/ui (web) and/or Expo + NativeWind v5 + react-native-reusables + @expo/ui (mobile), wired into a single pnpm monorepo. The agent orchestrates questions and environment checks; everything file-level is vendored as templates + scripts so runs are deterministic.
 ---
 
 # Create New Project
@@ -11,9 +11,9 @@ Scaffold a Next.js + shadcn monorepo, an Expo mobile app, and a design-system vi
 
 Use when the user wants to start a new project — a marketing site, a mobile app, or both. Default is **both** (the primary use case).
 
-## Design principle — LLM orchestrates, scripts execute
+## Design principle — agent orchestrates, scripts execute
 
-Every deterministic file write is in `templates/` and every deterministic transform is in `scripts/`. The LLM's job is narrow:
+Every deterministic file write is in `templates/` and every deterministic transform is in `scripts/`. The agent's job is narrow:
 
 1. Run preflight checks (diagnostic, adapts to user's environment).
 2. Ask the user 3 questions (project name, platform, preset).
@@ -24,7 +24,7 @@ Do NOT copy template content into prose and ask the model to reproduce it — th
 
 ## Interaction Method
 
-**IMPORTANT:** Gather all inputs via the `AskUserQuestion` tool. Do NOT print questions as plain text — use the tool so the user gets a proper interactive prompt. One question at a time.
+**IMPORTANT:** Gather all inputs through the host agent's interactive user-input mechanism. Ask one question at a time and wait for the user's answer before continuing. In Claude Code, use `AskUserQuestion`. In Codex, use the available user-input flow when present; otherwise ask one concise question in chat and wait for the reply.
 
 ## Prerequisite skills
 
@@ -56,16 +56,16 @@ Run these checks in parallel and collect failures into a single report. Don't pr
 
 If ANY check fails: stop, report ALL failures in a single block, give each fix command, tell the user to re-run the skill once fixed. Don't start scaffolding with a known-broken environment.
 
-### Step 1 — Collect inputs via AskUserQuestion
+### Step 1 — Collect inputs
 
-Ask in order (skip a question if the value was already provided in the slash-command args):
+Ask in order (skip a question if the value was already provided in the skill invocation args):
 
 1. **Project name** — e.g. `my-app`
 2. **Platform** — `Both (recommended)` / `Web only` / `Mobile only`
 3. **Preset** — accept a shadcn preset ID, a full `https://ui.shadcn.com/create?preset=...` URL (extract the ID), or press enter for the default (`b0`)
 4. **Parent directory** — if `~/Projects/` exists, default to it without asking. Otherwise ask.
 
-If the user's preset input looks malformed (non-alphanumeric, whitespace, etc.), confirm once via AskUserQuestion before proceeding — don't silently guess.
+If the user's preset input looks malformed (non-alphanumeric, whitespace, etc.), confirm once through the host agent's user-input mechanism before proceeding — don't silently guess.
 
 ### Step 2 — Invoke the bootstrap script
 
@@ -107,10 +107,10 @@ Show the user:
 ## Repository layout
 
 ```
-.claude/skills/create-new-project/
+skills/create-new-project/
 ├── SKILL.md                  ← this file (thin orchestration layer)
 ├── scripts/
-│   ├── bootstrap.mjs         ← main orchestrator (shell + node, no LLM)
+│   ├── bootstrap.mjs         ← main orchestrator (shell + node, no agent-generated files)
 │   ├── patch-root-package.mjs
 │   ├── patch-design-system.mjs
 │   ├── install-mobile-templates.mjs
