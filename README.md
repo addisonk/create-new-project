@@ -33,19 +33,28 @@ Then invoke with:
 
 ### Codex
 
-This repo includes a Codex manifest at `.codex-plugin/plugin.json`. Add the repo as a marketplace, install the plugin, then invoke the bundled skill:
+This repo includes a Codex manifest at `.codex-plugin/plugin.json`.
+
+For terminal Codex, install the skill directly into the shared agent skill directory:
+
+```bash
+mkdir -p ~/.agents/skills
+ln -s ~/Projects/create-new-project/skills/create-new-project ~/.agents/skills/create-new-project
+```
+
+Restart Codex, then invoke:
+
+```
+$create-new-project
+```
+
+If you want to test the plugin marketplace metadata as well, add the repo as a marketplace:
 
 ```bash
 codex plugin marketplace add addisonk/create-new-project
 ```
 
-Restart Codex, open the Plugin Directory, choose the **Create New Project** marketplace, and install the plugin.
-
-Then in Codex:
-
-```
-$create-new-project
-```
+Terminal Codex currently exposes marketplace add/upgrade/remove commands, but not a separate plugin install command. The direct `~/.agents/skills` install is the dependable terminal workflow.
 
 ### System requirements
 
