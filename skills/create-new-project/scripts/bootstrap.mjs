@@ -72,17 +72,24 @@ function runIn(cwd, cmd) {
 // WEB (includes the monorepo scaffolding for both "web" and "both")
 // ───────────────────────────────────────────────────────────────────────────
 if (platform === "both" || platform === "web") {
-  // 1. shadcn init --monorepo (pipe project name to its interactive prompt)
+  // 1. Pre-create the project dir and drop .npmrc BEFORE shadcn init.
+  //    `shadcn init --monorepo` runs its own `pnpm install` internally; if
+  //    .npmrc isn't there yet, that install builds node_modules + lockfile
+  //    under default hoisting, and the very next pnpm op (step 3) fails with
+  //    ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF once we change the rules under it.
+  mkdirSync(project, { recursive: true });
+  cpSync(join(TEMPLATES, "root/.npmrc"), join(project, ".npmrc"));
+
+  // 2. shadcn init --monorepo (pipe project name to its interactive prompt).
+  //    Its internal `pnpm install` now picks up shamefully-hoist=true from
+  //    the .npmrc we just placed.
   run(
     `echo ${JSON.stringify(name)} | pnpm dlx shadcn@latest init --preset ${preset} --template next --monorepo`,
     { cwd: parent }
   );
 
-  // 2. Drop the .npmrc immediately so EVERY subsequent pnpm operation runs
-  //    under shamefully-hoist=true. If we wait until after the mobile installs,
-  //    we end up mixing hoisting modes and pnpm trips when later commands
-  //    (e.g. `pnpm add -Dw culori`) try to mutate a tree that was built under
-  //    different rules.
+  // 2b. Defensive re-copy in case shadcn init overwrote our .npmrc with its
+  //     own monorepo template. Idempotent — same source, same destination.
   cpSync(join(TEMPLATES, "root/.npmrc"), join(project, ".npmrc"));
 
   // 3. Install all shadcn components into packages/ui

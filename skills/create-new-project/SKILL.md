@@ -38,23 +38,16 @@ Not required to run, but worth reading for context on what the mobile templates 
 
 ## Steps
 
-### Step 0 — Preflight check
+### Step 0 — Universal preflight
 
-Run these checks in parallel and collect failures into a single report. Don't proceed to Step 1 until everything passes.
+Run these checks in parallel and collect failures into a single report. Don't proceed until all pass. These are required for every path (web, mobile, both), so we run them before asking the user anything — a failure here is a blocker regardless of platform.
 
-**Universal (all paths):**
 - `command -v pnpm && pnpm --version` — need pnpm 10.x. Fix: `corepack enable && corepack prepare pnpm@10 --activate`
 - `command -v gh` — needed to clone the design-system viewer. Fix: `brew install gh`
 - `node -v` — Node 20+. Fix: `brew install node@20` or nvm
 - `command -v git` — Fix: `xcode-select --install`
 
-**Mobile (both / mobile paths):**
-- `xcode-select -p` — must print a path. Fix: install Xcode from the App Store, then `sudo xcode-select --install`.
-- `xcodebuild -version` — extract Xcode's **major.minor** (e.g. `26.4`).
-- `xcrun simctl list runtimes -j` — parse JSON; require a runtime whose `version` matches Xcode's **exact major.minor**. Near-misses fail `xcodebuild` later with `Unable to find a destination`. Fix: `xcodebuild -downloadPlatform iOS` (~8 GB, 15–20 min).
-- `xcrun simctl list devices available -j` — require at least one device on the matching runtime.
-
-If ANY check fails: stop, report ALL failures in a single block, give each fix command, tell the user to re-run the skill once fixed. Don't start scaffolding with a known-broken environment.
+If ANY check fails: stop, report ALL failures in a single block, give each fix command, tell the user to re-run the skill once fixed.
 
 ### Step 1 — Collect inputs
 
@@ -66,6 +59,17 @@ Ask in order (skip a question if the value was already provided in the skill inv
 4. **Parent directory** — if `~/Projects/` exists, default to it without asking. Otherwise ask.
 
 If the user's preset input looks malformed (non-alphanumeric, whitespace, etc.), confirm once through the host agent's user-input mechanism before proceeding — don't silently guess.
+
+### Step 1b — Mobile preflight (conditional)
+
+**Only run if the user chose `Both` or `Mobile only` in Step 1.** Skip entirely on `Web only` — there's no reason to fail a web-only scaffold on missing Xcode.
+
+- `xcode-select -p` — must print a path. Fix: install Xcode from the App Store, then `sudo xcode-select --install`.
+- `xcodebuild -version` — extract Xcode's **major.minor** (e.g. `26.4`).
+- `xcrun simctl list runtimes -j` — parse JSON; require a runtime whose `version` matches Xcode's **exact major.minor**. Near-misses fail `xcodebuild` later with `Unable to find a destination`. Fix: `xcodebuild -downloadPlatform iOS` (~8 GB, 15–20 min).
+- `xcrun simctl list devices available -j` — require at least one device on the matching runtime.
+
+If any of these fail: stop, report all failures, tell the user to re-run once fixed. Don't start scaffolding mobile with a known-broken iOS toolchain.
 
 ### Step 2 — Invoke the bootstrap script
 
