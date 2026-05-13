@@ -101,6 +101,32 @@ cd {name}/apps/mobile && npx expo run:ios
 
 Updates only trigger when the plugin `version` field bumps — commits alone don't trigger them. Check [releases](https://github.com/addisonk/create-new-project/releases) for what's in each version.
 
+### Auto-updates
+
+Self-hosted marketplaces ship with auto-update **off** by default. Once you opt in, Claude Code refreshes plugins from this marketplace at every session startup (no manual `/plugin marketplace update` needed). Two ways to enable it:
+
+**Per-user (one-time toggle):**
+1. Run `/plugin` in Claude Code.
+2. Open the **Marketplaces** tab.
+3. Toggle auto-update on for `create-new-project`.
+
+**Via settings.json (good for managed/team environments):**
+
+Add to `~/.claude/settings.json` (per-user) or your org's managed-settings file (team-wide):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "create-new-project": {
+      "source": { "source": "github", "repo": "addisonk/create-new-project" },
+      "autoUpdate": true
+    }
+  }
+}
+```
+
+Updates only run at session startup, not as a background poll. After an update lands you'll see a prompt to `/reload-plugins` to apply it without restarting Claude Code. See [Claude Code docs → Configure auto-updates](https://docs.claude.com/en/docs/claude-code/discover-plugins) for the upstream reference.
+
 ## What you get
 
 ### Both (default)
