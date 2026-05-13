@@ -229,8 +229,12 @@ Repo layout:
 
 1. Make changes under `skills/create-new-project/`.
 2. Test locally (symlink means no reinstall).
-3. Bump `version` in `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `.codex-plugin/plugin.json`.
-4. Commit and push. Users get it on their next `/plugin marketplace update`.
+3. Commit with a [conventional-commit](https://www.conventionalcommits.org/) prefix and push. The `.github/workflows/auto-bump.yml` action handles the rest:
+   - `feat:` → minor bump
+   - `fix:` / `perf:` → patch bump
+   - `feat!:` / `BREAKING CHANGE` → major bump
+   - `docs:` / `chore:` / `refactor:` / `style:` / `test:` → no bump
+4. The workflow writes the new version into `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, and `.codex-plugin/plugin.json`, commits as `chore: release vX.Y.Z`, tags it, and pushes back to `main`. Users pick it up on their next `/plugin marketplace update`.
 
 ## Prerequisite skills
 
