@@ -10,7 +10,13 @@
 // Reuses the sibling skill's patch helpers (patch-design-system.mjs,
 // patch-ui-globals.mjs) — both take --root and are idempotent.
 
-import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +40,118 @@ const args = Object.fromEntries(
 
 const rootRaw = args.root || process.cwd();
 const root = resolve(rootRaw.replace(/^~/, process.env.HOME || ""));
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+// Detect the host monorepo's package namespace by reading packages/ui's name.
+// e.g. "@g14/ui" → "@g14". The cloned viewer ships with "@workspace/*" deps
+// (shadcn's init --monorepo default) which we must rewrite to whatever the
+// host actually uses.
+function detectHostNamespace(root) {
+  const uiPkg = JSON.parse(
+    readFileSync(join(root, "packages/ui/package.json"), "utf-8")
+  );
+  const m = (uiPkg.name || "").match(/^(@[^/]+)\//);
+  if (!m) {
+    throw new Error(
+      `packages/ui/package.json has unscoped name "${uiPkg.name}" — can't detect host namespace. ` +
+        `Rename it to "@<your-scope>/ui" or scaffold via shadcn init --monorepo.`
+    );
+  }
+  return m[1];
+}
+
+// If the host has packages/typescript-config/, return its package name; else
+// null (caller falls back to extending the root tsconfig.json).
+function detectHostTsConfigPkg(root) {
+  const p = join(root, "packages/typescript-config/package.json");
+  if (!existsSync(p)) return null;
+  const pkg = JSON.parse(readFileSync(p, "utf-8"));
+  return pkg.name || null;
+}
+
+// Remap @workspace/* references in the cloned viewer to match the host's
+// namespace + tsconfig setup. Operates in-place on viewer files. Run after
+// `gh repo clone` and before `pnpm install`.
+function remapViewer(viewerDir, hostNs, hostTsConfigName) {
+  // 1. package.json deps
+  const vpPath = join(viewerDir, "package.json");
+  const vp = JSON.parse(readFileSync(vpPath, "utf-8"));
+  for (const depsKey of ["dependencies", "devDependencies", "peerDependencies"]) {
+    if (!vp[depsKey]) continue;
+    const next = {};
+    for (const [name, ver] of Object.entries(vp[depsKey])) {
+      if (name === "@workspace/typescript-config") {
+        if (hostTsConfigName) next[hostTsConfigName] = ver;
+        // else: drop — tsconfig is rewritten to point at the root file
+      } else if (name.startsWith("@workspace/")) {
+        next[`${hostNs}/${name.slice("@workspace/".length)}`] = ver;
+      } else {
+        next[name] = ver;
+      }
+    }
+    vp[depsKey] = next;
+  }
+  writeFileSync(vpPath, JSON.stringify(vp, null, 2) + "\n");
+
+  // 2. tsconfig.json — string-based to tolerate JSONC comments.
+  const tsPath = join(viewerDir, "tsconfig.json");
+  if (existsSync(tsPath)) {
+    let text = readFileSync(tsPath, "utf-8");
+    if (hostTsConfigName) {
+      text = text.replace(/@workspace\/typescript-config/g, hostTsConfigName);
+    } else {
+      // apps/design-system is 2 levels under root → ../../tsconfig.json
+      text = text.replace(
+        /"extends"\s*:\s*"@workspace\/typescript-config[^"]*"/,
+        `"extends": "../../tsconfig.json"`
+      );
+    }
+    writeFileSync(tsPath, text);
+  }
+
+  // 3. Source file imports: any remaining @workspace/* → @<hostNs>/*
+  const srcExts = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".css"];
+  const skipDirs = new Set(["node_modules", ".next", ".turbo", "dist", "build"]);
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (skipDirs.has(entry.name)) continue;
+        walk(join(dir, entry.name));
+      } else if (srcExts.some((ext) => entry.name.endsWith(ext))) {
+        const full = join(dir, entry.name);
+        const src = readFileSync(full, "utf-8");
+        if (src.includes("@workspace/")) {
+          writeFileSync(full, src.replace(/@workspace\//g, `${hostNs}/`));
+        }
+      }
+    }
+  }
+  walk(viewerDir);
+
+  console.log(
+    `remapped @workspace/* → ${hostNs}/* in viewer (tsconfig: ${hostTsConfigName || "root fallback"})`
+  );
+}
+
+// Add a script to package.json while preserving the host's existing
+// indentation + trailing newline. Avoids the giant cosmetic diff that a
+// naive JSON.parse → JSON.stringify produces on files with non-default
+// formatting. Returns true if the file changed.
+function addScriptPreservingFormat(pkgPath, name, value) {
+  const text = readFileSync(pkgPath, "utf-8");
+  const pkg = JSON.parse(text);
+  if (pkg.scripts?.[name] === value) return false;
+  pkg.scripts = pkg.scripts || {};
+  pkg.scripts[name] = value;
+  const indentMatch = text.match(/^([ \t]+)\S/m);
+  const indent = indentMatch ? indentMatch[1] : "  ";
+  const trailing = text.endsWith("\n") ? "\n" : "";
+  const out = JSON.stringify(pkg, null, indent) + trailing;
+  if (out === text) return false;
+  writeFileSync(pkgPath, out);
+  return true;
+}
 
 // ── preflight: is this actually the right kind of monorepo? ────────────────
 const failures = [];
@@ -85,7 +203,24 @@ if (failures.length) {
 
 console.log(`✓ preflight passed in ${root}`);
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ── detect host shape ──────────────────────────────────────────────────────
+const hostNs = detectHostNamespace(root);
+const hostTsConfigName = detectHostTsConfigPkg(root);
+console.log(`  host namespace: ${hostNs}`);
+console.log(
+  `  host typescript-config: ${hostTsConfigName || "(none — viewer will extend root tsconfig.json)"}`
+);
+
+// If host has no typescript-config package, we MUST have a root tsconfig.json
+// for the viewer to extend.
+if (!hostTsConfigName && !existsSync(join(root, "tsconfig.json"))) {
+  console.error(
+    `\n✗ host has no packages/typescript-config and no root tsconfig.json — the viewer needs something to extend. ` +
+      `Add a tsconfig.json at the repo root and re-run.`
+  );
+  process.exit(1);
+}
+
 function runIn(cwd, cmd) {
   console.log(`\n→ ${cmd}`);
   execSync(cmd, { cwd, stdio: "inherit" });
@@ -94,6 +229,9 @@ function runIn(cwd, cmd) {
 // ── 1. clone the design-system viewer (depth 1, drop .git) ─────────────────
 runIn(root, `gh repo clone addisonk/create-new-project apps/design-system -- --depth 1`);
 rmSync(join(root, "apps/design-system/.git"), { recursive: true, force: true });
+
+// ── 1b. remap @workspace/* → host namespace (deps, tsconfig, imports) ──────
+remapViewer(join(root, "apps/design-system"), hostNs, hostTsConfigName);
 
 // ── 2. patch design-system (style + fonts + sleep 2) ───────────────────────
 runIn(
@@ -110,17 +248,20 @@ runIn(
 // ── 4. add dev:design-system script to root package.json (idempotent) ──────
 // We intentionally DON'T call patch-root-package.mjs — that script also
 // rewrites `dev` / `dev:mobile` / pnpm overrides, which would clobber the
-// host project's choices. We only add the one script the new app needs.
+// host project's choices. We only add the one script the new app needs, and
+// we preserve the host's existing indentation/whitespace to keep the diff
+// to a single line.
 {
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-  pkg.scripts = pkg.scripts || {};
-  if (!pkg.scripts["dev:design-system"]) {
-    pkg.scripts["dev:design-system"] = "turbo --filter design-system dev";
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-    console.log(`\n→ added "dev:design-system" script to root package.json`);
-  } else {
-    console.log(`\n→ "dev:design-system" script already present — skipped`);
-  }
+  const added = addScriptPreservingFormat(
+    pkgPath,
+    "dev:design-system",
+    "turbo --filter design-system dev"
+  );
+  console.log(
+    added
+      ? `\n→ added "dev:design-system" script to root package.json (format preserved)`
+      : `\n→ "dev:design-system" script already present — skipped`
+  );
 }
 
 // ── 5. resolve the viewer's new deps ───────────────────────────────────────
