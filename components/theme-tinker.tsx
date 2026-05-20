@@ -8,6 +8,13 @@ import type { ColorTokens } from "@/lib/config";
 
 type LevaColor = string | { r: number; g: number; b: number; a: number };
 
+// colorjs.io returns NaN for the hue channel of chromaless colors (white/grey/
+// black), since hue is undefined when chroma is 0. NaN.toFixed() yields the
+// string "NaN", which browsers reject as an invalid CSS value. Coerce to 0.
+function finiteCoord(n: number | undefined): number {
+  return Number.isFinite(n) ? (n as number) : 0;
+}
+
 export interface ThemeEditor {
   values: Record<string, unknown>;
   userEdited: React.MutableRefObject<Set<string>>;
@@ -307,7 +314,7 @@ export function useThemeTinker(colorTokens: ColorTokens) {
             const oklch = c.to("oklch");
             document.documentElement.style.setProperty(
               `--${cssKey}`,
-              `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`
+              `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(1)})`
             );
           } catch {
             document.documentElement.style.setProperty(`--${cssKey}`, val);
@@ -387,11 +394,11 @@ function levaColorToOklch(val: LevaColor): string {
       const c = new Color("srgb", [r / 255, g / 255, b / 255], a);
       const oklch = c.to("oklch");
       const alpha = a != null && a < 1 ? ` / ${Math.round(a * 100)}%` : "";
-      return `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)}${alpha})`;
+      return `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(1)}${alpha})`;
     } else if (typeof val === "string") {
       const c = new Color(val);
       const oklch = c.to("oklch");
-      return `oklch(${oklch.coords[0]?.toFixed(3)} ${oklch.coords[1]?.toFixed(3)} ${oklch.coords[2]?.toFixed(1)})`;
+      return `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(1)})`;
     }
   } catch {}
   return String(val);

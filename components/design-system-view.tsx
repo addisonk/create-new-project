@@ -384,11 +384,18 @@ function getThemePresetColors(): string[] {
 
 // ─── Sub-components ───
 
+// colorjs.io returns NaN for the hue of chromaless colors (white/grey/black).
+// `?.` only guards null/undefined, not NaN — coerce non-finite to 0 so we
+// never emit `oklch(... NaN)`, which browsers reject as invalid CSS.
+function finiteCoord(n: number | undefined): number {
+  return Number.isFinite(n) ? (n as number) : 0;
+}
+
 // Convert a hex color to the oklch format used throughout globals.css.
 function hexToOklch(hex: string): string {
   try {
     const oklch = new Color(hex).to("oklch");
-    return `oklch(${oklch.coords[0]?.toFixed(4)} ${oklch.coords[1]?.toFixed(4)} ${oklch.coords[2]?.toFixed(2)})`;
+    return `oklch(${finiteCoord(oklch.coords[0]).toFixed(4)} ${finiteCoord(oklch.coords[1]).toFixed(4)} ${finiteCoord(oklch.coords[2]).toFixed(2)})`;
   } catch {
     return hex;
   }

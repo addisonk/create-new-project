@@ -67,10 +67,17 @@ function normalizeHex(v: string): string {
   return "#" + stripped;
 }
 
+// colorjs.io returns NaN for the hue of chromaless colors (white/grey/black).
+// `?? 0` only guards null/undefined, not NaN — coerce non-finite to 0 so we
+// never emit `oklch(... NaN)`, which browsers reject as invalid CSS.
+function finiteCoord(n: number | undefined): number {
+  return Number.isFinite(n) ? (n as number) : 0;
+}
+
 function hexToOklchString(hex: string): string {
   const c = new Color(hex).to("oklch");
   const [l, ch, h] = c.coords;
-  return `oklch(${(l ?? 0).toFixed(4)} ${(ch ?? 0).toFixed(4)} ${(h ?? 0).toFixed(2)})`;
+  return `oklch(${finiteCoord(l).toFixed(4)} ${finiteCoord(ch).toFixed(4)} ${finiteCoord(h).toFixed(2)})`;
 }
 
 function srgbCoordsToHex(r: number, g: number, b: number): string {
