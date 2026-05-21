@@ -312,9 +312,11 @@ export function useThemeTinker(colorTokens: ColorTokens) {
           try {
             const c = new Color(val);
             const oklch = c.to("oklch");
+            const a = c.alpha;
+            const alpha = a != null && a < 1 ? ` / ${Math.round(a * 100)}%` : "";
             document.documentElement.style.setProperty(
               `--${cssKey}`,
-              `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(1)})`
+              `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(2)}${alpha})`
             );
           } catch {
             document.documentElement.style.setProperty(`--${cssKey}`, val);
@@ -394,11 +396,13 @@ function levaColorToOklch(val: LevaColor): string {
       const c = new Color("srgb", [r / 255, g / 255, b / 255], a);
       const oklch = c.to("oklch");
       const alpha = a != null && a < 1 ? ` / ${Math.round(a * 100)}%` : "";
-      return `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(1)}${alpha})`;
+      return `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(2)}${alpha})`;
     } else if (typeof val === "string") {
       const c = new Color(val);
       const oklch = c.to("oklch");
-      return `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(1)})`;
+      const a = c.alpha;
+      const alpha = a != null && a < 1 ? ` / ${Math.round(a * 100)}%` : "";
+      return `oklch(${finiteCoord(oklch.coords[0]).toFixed(3)} ${finiteCoord(oklch.coords[1]).toFixed(3)} ${finiteCoord(oklch.coords[2]).toFixed(2)}${alpha})`;
     }
   } catch {}
   return String(val);

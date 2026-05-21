@@ -394,8 +394,11 @@ function finiteCoord(n: number | undefined): number {
 // Convert a hex color to the oklch format used throughout globals.css.
 function hexToOklch(hex: string): string {
   try {
-    const oklch = new Color(hex).to("oklch");
-    return `oklch(${finiteCoord(oklch.coords[0]).toFixed(4)} ${finiteCoord(oklch.coords[1]).toFixed(4)} ${finiteCoord(oklch.coords[2]).toFixed(2)})`;
+    const parsed = new Color(hex);
+    const oklch = parsed.to("oklch");
+    const a = parsed.alpha;
+    const alpha = a != null && a < 1 ? ` / ${Math.round(a * 1000) / 10}%` : "";
+    return `oklch(${finiteCoord(oklch.coords[0]).toFixed(4)} ${finiteCoord(oklch.coords[1]).toFixed(4)} ${finiteCoord(oklch.coords[2]).toFixed(2)}${alpha})`;
   } catch {
     return hex;
   }
